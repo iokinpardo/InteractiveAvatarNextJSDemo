@@ -7,24 +7,18 @@ import {
   STTProvider,
   ElevenLabsModel,
 } from "@heygen/streaming-avatar";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
-import { Button } from "./Button";
-import { AvatarConfig } from "./AvatarConfig";
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
-import { AvatarControls } from "./AvatarSession/AvatarControls";
 import { useVoiceChat } from "./logic/useVoiceChat";
 import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
 import { LoadingIcon } from "./Icons";
-import { MessageHistory } from "./AvatarSession/MessageHistory";
 
-import { AVATARS } from "@/app/lib/constants";
-
-const DEFAULT_CONFIG: StartAvatarRequest = {
+const createDefaultConfig = (): StartAvatarRequest => ({
   quality: AvatarQuality.Low,
-  avatarName: AVATARS[0].avatar_id,
+  avatarName: "Ann_Therapist_public",
   knowledgeId: undefined,
   voice: {
     rate: 1.5,
@@ -36,16 +30,15 @@ const DEFAULT_CONFIG: StartAvatarRequest = {
   sttSettings: {
     provider: STTProvider.DEEPGRAM,
   },
-};
+});
 
 function InteractiveAvatar() {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
 
-  const [config, setConfig] = useState<StartAvatarRequest>(DEFAULT_CONFIG);
-
   const mediaStream = useRef<HTMLVideoElement>(null);
+  const hasStarted = useRef(false);
 
   async function fetchAccessToken() {
     try {
@@ -63,7 +56,7 @@ function InteractiveAvatar() {
     }
   }
 
-  const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
+  const startSession = useMemoizedFn(async () => {
     try {
       const newToken = await fetchAccessToken();
       const avatar = initAvatar(newToken);
@@ -99,15 +92,19 @@ function InteractiveAvatar() {
         console.log(">>>>> Avatar end message:", event);
       });
 
-      await startAvatar(config);
-
-      if (isVoiceChat) {
-        await startVoiceChat();
-      }
+      await startAvatar(createDefaultConfig());
+      await startVoiceChat();
     } catch (error) {
       console.error("Error starting avatar session:", error);
     }
   });
+
+  useEffect(() => {
+    if (!hasStarted.current) {
+      hasStarted.current = true;
+      startSession();
+    }
+  }, [startSession]);
 
   useUnmount(() => {
     stopAvatar();
@@ -123,35 +120,16 @@ function InteractiveAvatar() {
   }, [mediaStream, stream]);
 
   return (
-    <div className="w-full flex flex-col gap-4">
-      <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
-        <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
-          {sessionState !== StreamingAvatarSessionState.INACTIVE ? (
-            <AvatarVideo ref={mediaStream} />
-          ) : (
-            <AvatarConfig config={config} onConfigChange={setConfig} />
-          )}
-        </div>
-        <div className="flex flex-col gap-3 items-center justify-center p-4 border-t border-zinc-700 w-full">
-          {sessionState === StreamingAvatarSessionState.CONNECTED ? (
-            <AvatarControls />
-          ) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
-            <div className="flex flex-row gap-4">
-              <Button onClick={() => startSessionV2(true)}>
-                Start Voice Chat
-              </Button>
-              <Button onClick={() => startSessionV2(false)}>
-                Start Text Chat
-              </Button>
-            </div>
-          ) : (
-            <LoadingIcon />
-          )}
-        </div>
+    <div className="w-full max-w-[900px]">
+      <div className="relative w-full aspect-video overflow-hidden rounded-3xl bg-zinc-900">
+        <AvatarVideo ref={mediaStream} />
+        {sessionState !== StreamingAvatarSessionState.CONNECTED && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-zinc-900">
+            <LoadingIcon className="animate-spin" />
+            <span className="text-sm text-zinc-300">Starting voice chat…</span>
+          </div>
+        )}
       </div>
-      {sessionState === StreamingAvatarSessionState.CONNECTED && (
-        <MessageHistory />
-      )}
     </div>
   );
 }
