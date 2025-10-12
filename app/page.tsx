@@ -1,17 +1,24 @@
 import InteractiveAvatar from "@/components/InteractiveAvatar";
 
-type PageSearchParams = {
-  systemPrompt?: string;
-  system_prompt?: string;
-};
+type PageSearchParams = Record<string, string | string[] | undefined>;
 
 type PageProps = {
-  searchParams?: PageSearchParams;
+  searchParams?: Promise<PageSearchParams> | PageSearchParams;
 };
 
-export default function App({ searchParams }: PageProps) {
+const extractParam = (value?: string | string[]): string | undefined => {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+};
+
+export default async function App({ searchParams }: PageProps) {
+  const resolvedSearchParams = (await Promise.resolve(searchParams)) ?? {};
   const systemPrompt =
-    searchParams?.systemPrompt ?? searchParams?.system_prompt ?? undefined;
+    extractParam(resolvedSearchParams.systemPrompt) ??
+    extractParam(resolvedSearchParams.system_prompt);
 
   return (
     <div className="flex w-full justify-center px-4">
