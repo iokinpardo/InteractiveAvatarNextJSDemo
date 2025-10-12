@@ -1,3 +1,5 @@
+"use client";
+
 import {
   AvatarQuality,
   StreamingEvents,
@@ -16,7 +18,13 @@ import { useVoiceChat } from "./logic/useVoiceChat";
 import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
 import { LoadingIcon } from "./Icons";
 
-const createDefaultConfig = (): StartAvatarRequest => ({
+type StartAvatarRequestWithSystemPrompt = StartAvatarRequest & {
+  systemPrompt?: string;
+};
+
+const createDefaultConfig = (
+  systemPrompt?: string,
+): StartAvatarRequestWithSystemPrompt => ({
   quality: AvatarQuality.Low,
   avatarName: "Ann_Therapist_public",
   knowledgeId: undefined,
@@ -30,9 +38,14 @@ const createDefaultConfig = (): StartAvatarRequest => ({
   sttSettings: {
     provider: STTProvider.DEEPGRAM,
   },
+  ...(systemPrompt ? { systemPrompt } : {}),
 });
 
-function InteractiveAvatar() {
+type InteractiveAvatarProps = {
+  systemPrompt?: string;
+};
+
+function InteractiveAvatar({ systemPrompt }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
@@ -92,7 +105,14 @@ function InteractiveAvatar() {
         console.log(">>>>> Avatar end message:", event);
       });
 
-      await startAvatar(createDefaultConfig());
+      const sanitizedSystemPrompt = systemPrompt?.trim() || undefined;
+      const startConfig = createDefaultConfig(sanitizedSystemPrompt);
+
+      if (sanitizedSystemPrompt) {
+        console.log("Using system prompt for session", sanitizedSystemPrompt);
+      }
+
+      await startAvatar(startConfig);
       await startVoiceChat();
     } catch (error) {
       console.error("Error starting avatar session:", error);
@@ -134,10 +154,16 @@ function InteractiveAvatar() {
   );
 }
 
-export default function InteractiveAvatarWrapper() {
+type InteractiveAvatarWrapperProps = {
+  systemPrompt?: string;
+};
+
+export default function InteractiveAvatarWrapper({
+  systemPrompt,
+}: InteractiveAvatarWrapperProps) {
   return (
     <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
-      <InteractiveAvatar />
+      <InteractiveAvatar systemPrompt={systemPrompt} />
     </StreamingAvatarProvider>
   );
 }
