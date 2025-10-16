@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  type ReactElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type SceneKey = "agenda" | "offer";
@@ -72,7 +65,7 @@ const ALLOWED_TEXT_KEYS = new Set<TextTarget>([
 ]);
 const ALLOWED_COUNTERS = new Set<CounterTarget>(["#qa-count"]);
 
-export default function AvatarPage(): ReactElement {
+export default function AvatarPage(): JSX.Element {
   const params = useSearchParams();
   const session = params.get("session") ?? undefined;
   const encodedWss = params.get("wss") ?? undefined;
