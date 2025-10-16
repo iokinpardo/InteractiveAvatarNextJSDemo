@@ -1,10 +1,29 @@
 import InteractiveAvatar from "@/components/InteractiveAvatar";
 import { FilePdfIcon } from "@/components/Icons";
 
+type PageSearchParams = Record<string, string | string[] | undefined>;
+
+type PageProps = {
+  searchParams?: Promise<PageSearchParams> | PageSearchParams;
+};
+
 const DOCUMENTATION_LINK =
   "https://www.antennahouse.com/hubfs/xsl-fo-sample/pdf/basic-link-1.pdf";
 
-export default function App() {
+const extractParam = (value?: string | string[]): string | undefined => {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+};
+
+export default async function App({ searchParams }: PageProps) {
+  const resolvedSearchParams = (await Promise.resolve(searchParams)) ?? {};
+  const systemPrompt =
+    extractParam(resolvedSearchParams.systemPrompt) ??
+    extractParam(resolvedSearchParams.system_prompt);
+
   return (
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-4 py-6 lg:flex-row lg:items-start">
       <aside className="flex w-full flex-col gap-4 rounded-3xl bg-zinc-900/70 p-6 text-zinc-100 shadow-lg lg:w-64">
@@ -22,32 +41,8 @@ export default function App() {
         </a>
       </aside>
       <div className="flex w-full justify-center lg:justify-start">
-        <InteractiveAvatar />
+        <InteractiveAvatar systemPrompt={systemPrompt} />
       </div>
-
-type PageSearchParams = Record<string, string | string[] | undefined>;
-
-type PageProps = {
-  searchParams?: Promise<PageSearchParams> | PageSearchParams;
-};
-
-const extractParam = (value?: string | string[]): string | undefined => {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return value;
-};
-
-export default async function App({ searchParams }: PageProps) {
-  const resolvedSearchParams = (await Promise.resolve(searchParams)) ?? {};
-  const systemPrompt =
-    extractParam(resolvedSearchParams.systemPrompt) ??
-    extractParam(resolvedSearchParams.system_prompt);
-
-  return (
-    <div className="flex w-full justify-center px-4">
-      <InteractiveAvatar systemPrompt={systemPrompt} />
     </div>
   );
 }
