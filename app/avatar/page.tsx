@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 
 type SceneKey = "agenda" | "offer";
@@ -65,7 +73,7 @@ const ALLOWED_TEXT_KEYS = new Set<TextTarget>([
 ]);
 const ALLOWED_COUNTERS = new Set<CounterTarget>(["#qa-count"]);
 
-export default function AvatarPage(): JSX.Element {
+function AvatarPageContent(): ReactElement {
   const params = useSearchParams();
   const session = params.get("session") ?? undefined;
   const encodedWss = params.get("wss") ?? undefined;
@@ -482,5 +490,17 @@ export default function AvatarPage(): JSX.Element {
         )}
       </main>
     </div>
+  );
+}
+
+export default function AvatarPage(): ReactElement {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-4 text-sm text-neutral-500">Cargando avatar…</div>
+      }
+    >
+      <AvatarPageContent />
+    </Suspense>
   );
 }

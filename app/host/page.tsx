@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 
 type CommandPayload = Record<string, unknown> | undefined;
@@ -40,7 +48,7 @@ function formatTimestamp(ts: number): string {
   }).format(ts);
 }
 
-export default function HostControlPage(): JSX.Element {
+function HostControlPageContent(): ReactElement {
   const params = useSearchParams();
   const session = params.get("session") ?? undefined;
   const encodedWss = params.get("wss") ?? undefined;
@@ -316,6 +324,18 @@ export default function HostControlPage(): JSX.Element {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function HostControlPage(): ReactElement {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-4 text-sm text-neutral-500">Cargando controles…</div>
+      }
+    >
+      <HostControlPageContent />
+    </Suspense>
   );
 }
 
