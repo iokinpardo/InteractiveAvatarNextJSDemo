@@ -32,56 +32,6 @@ export function GithubIcon({
   );
 }
 
-export function FilePdfIcon({
-  size = 24,
-  width,
-  height,
-  ...props
-}: IconSvgProps) {
-  return (
-    <svg
-      fill="none"
-      height={size || height}
-      viewBox="0 0 24 24"
-      width={size || width}
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      <path
-        d="M14.5 2.75H8A2.25 2.25 0 0 0 5.75 5v14A2.25 2.25 0 0 0 8 21.25h8A2.25 2.25 0 0 0 18.25 19V8.5Z"
-        fill="currentColor"
-        opacity="0.2"
-      />
-      <path
-        d="M14.5 2.75V7A1.5 1.5 0 0 0 16 8.5h4.25"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M8 21.25h8A2.25 2.25 0 0 0 18.25 19V8.5L14.5 2.75H8A2.25 2.25 0 0 0 5.75 5v14A2.25 2.25 0 0 0 8 21.25Z"
-        stroke="currentColor"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M8.75 13.5h.75a1 1 0 0 1 1 1v0a1 1 0 0 1-1 1h-.75v-2Zm4 0h-.75v2h.75a1 1 0 0 0 1-1v0a1 1 0 0 0-1-1Zm1.75 0h1"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M9.5 15.5v1m3-1v1m3-3v3"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.5"
-      />
-    </svg>
-  );
-}
-
 export function ChevronDownIcon({
   size = 24,
   width,
