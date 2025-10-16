@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Suspense,
   type ReactElement,
   useCallback,
   useEffect,
@@ -73,7 +72,7 @@ const ALLOWED_TEXT_KEYS = new Set<TextTarget>([
 ]);
 const ALLOWED_COUNTERS = new Set<CounterTarget>(["#qa-count"]);
 
-function AvatarPageContent(): ReactElement {
+export default function AvatarPage(): ReactElement {
   const params = useSearchParams();
   const session = params.get("session") ?? undefined;
   const encodedWss = params.get("wss") ?? undefined;

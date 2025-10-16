@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  Suspense,
-  type ReactElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import type { ReactElement } from "react";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type CommandPayload = Record<string, unknown> | undefined;
@@ -48,7 +42,7 @@ function formatTimestamp(ts: number): string {
   }).format(ts);
 }
 
-function HostControlPageContent(): ReactElement {
+export default function HostControlPage(): ReactElement {
   const params = useSearchParams();
   const session = params.get("session") ?? undefined;
   const encodedWss = params.get("wss") ?? undefined;
