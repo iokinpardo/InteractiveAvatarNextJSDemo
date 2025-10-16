@@ -2,8 +2,78 @@
 
 ![HeyGen Interactive Avatar NextJS Demo Screenshot](./public/demo.png)
 
-This is a sample project and was bootstrapped using [NextJS](https://nextjs.org/).
-Feel free to play around with the existing code and please leave any feedback for the SDK [here](https://github.com/HeyGen-Official/StreamingAvatarSDK/discussions).
+This project now includes a full control backend and web surfaces to drive a Recall.ai output-media avatar in real time. The Next.js front-end continues to host the original HeyGen demo while adding dedicated routes for the host control panel and the avatar page.
+
+## Control backend & Recall.ai integration
+
+### Environment variables
+
+Create a `.env` file with the following variables (all are required unless stated otherwise):
+
+| Variable | Description |
+| --- | --- |
+| `JWT_SECRET` | Secret used to sign/verify short-lived WebSocket tokens. |
+| `PUBLIC_APP_URL` | Public https:// URL where this app is served (used to mint host/avatar URLs). |
+| `WS_PUBLIC_URL` | Public wss:// endpoint that points to `YOUR_DOMAIN/ws` (used in the session response). |
+| `ACK_TIMEOUT_MS` | (Optional) Time in milliseconds to wait for an ACK before retrying. Default `5000`. |
+| `ACK_MAX_RETRIES` | (Optional) Maximum resend attempts before failing a command. Default `3`. |
+| `COMMAND_QUEUE_SIZE` | (Optional) Maximum buffered commands while the avatar is offline. Default `50`. |
+| `WS_ALLOWED_ORIGINS` | (Optional) Comma separated list of allowed `Origin` prefixes for WebSocket connections. |
+
+### Install & run
+
+```bash
+pnpm install
+pnpm dev
+```
+
+The `pnpm dev` command boots a custom Express server that embeds Next.js and exposes:
+
+- `POST /session` – creates a new session and returns signed WebSocket URLs plus the ready-to-use host and avatar links.
+- `GET /host` – host control panel. Pass `?session=...&wss=...` from the session response.
+- `GET /avatar` – avatar experience rendered at 1280×720. Pass the same query parameters.
+- `GET /` – existing HeyGen interactive avatar demo.
+
+For production builds run `pnpm build` followed by `pnpm start`. The compiled backend lives in `dist/server/app.js` and serves the prebuilt Next.js app.
+
+### Session bootstrap flow
+
+1. Call `POST /session` from your backend or CLI. The response contains `session`, `ws_host`, `ws_avatar`, `host_panel`, and `avatar_page`.
+2. Open `host_panel` in the browser. Buttons send JSON commands (`kind:"cmd"`, `action`, `payload`) through the WebSocket.
+3. Configure your Recall.ai bot with `output_media.camera.kind = "webpage"` and set the URL to `avatar_page`.
+4. The avatar page connects to the same WebSocket, applies DOM mutations (scene, theme, banner, counters, etc.), emits `ack` for each command, and streams the rendered page back to the meeting.
+
+Commands that arrive while the avatar is offline are buffered (up to `COMMAND_QUEUE_SIZE`) and replayed on reconnection. ACKs are retried up to `ACK_MAX_RETRIES` before returning an error to the host UI.
+
+### Using Recall.ai
+
+```bash
+curl -X POST "$CONTROL_BACKEND/session"
+
+# Create the bot with the returned avatar_page URL
+curl -X POST https://us-east-1.recall.ai/api/v1/bot/ \
+  -H "Authorization: $RECALLAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "meeting_url": "ZOOM_MEETING_URL",
+        "bot_name": "Avatar Recall",
+        "output_media": {
+          "camera": {
+            "kind": "webpage",
+            "config": { "url": "https://YOUR_APP/avatar?session=...&wss=..." }
+          }
+        },
+        "variant": { "zoom": "web_4_core", "google_meet": "web_4_core", "microsoft_teams": "web_4_core" }
+      }'
+```
+
+The avatar page requests microphone access automatically inside the Recall.ai browser and can be extended to consume the live transcription WebSocket for voice commands.
+
+---
+
+The original HeyGen demo documentation is preserved below for reference.
+
+This is a sample project and was bootstrapped using [NextJS](https://nextjs.org/). Feel free to play around with the existing code and please leave any feedback for the SDK [here](https://github.com/HeyGen-Official/StreamingAvatarSDK/discussions).
 
 ## Getting Started FAQ
 
