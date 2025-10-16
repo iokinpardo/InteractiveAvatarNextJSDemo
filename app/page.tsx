@@ -4,7 +4,7 @@ import { FilePdfIcon } from "@/components/Icons";
 type PageSearchParams = Record<string, string | string[] | undefined>;
 
 type PageProps = {
-  searchParams?: Promise<PageSearchParams>;
+  searchParams?: Promise<PageSearchParams> | PageSearchParams;
 };
 
 const DOCUMENTATION_LINK =
@@ -19,7 +19,7 @@ const extractParam = (value?: string | string[]): string | undefined => {
 };
 
 export default async function App({ searchParams }: PageProps) {
-  const resolvedSearchParams = (await searchParams) ?? {};
+  const resolvedSearchParams = (await Promise.resolve(searchParams)) ?? {};
   const systemPrompt =
     extractParam(resolvedSearchParams.systemPrompt) ??
     extractParam(resolvedSearchParams.system_prompt);
