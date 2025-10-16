@@ -321,18 +321,6 @@ export default function HostControlPage(): ReactElement {
   );
 }
 
-export default function HostControlPage(): ReactElement {
-  return (
-    <Suspense
-      fallback={
-        <div className="p-4 text-sm text-neutral-500">Cargando controles…</div>
-      }
-    >
-      <HostControlPageContent />
-    </Suspense>
-  );
-}
-
 type CommandMessage = {
   v: number;
   kind: "cmd";
