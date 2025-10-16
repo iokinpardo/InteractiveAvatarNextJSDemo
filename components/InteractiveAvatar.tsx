@@ -19,16 +19,11 @@ import { useVoiceChat } from "./logic/useVoiceChat";
 import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
 import { LoadingIcon } from "./Icons";
 
-type StartAvatarRequestWithSystemPrompt = StartAvatarRequest & {
-  systemPrompt?: string;
-};
-
-const createDefaultConfig = (
-  systemPrompt?: string,
-): StartAvatarRequestWithSystemPrompt => ({
+const createDefaultConfig = (systemPrompt?: string): StartAvatarRequest => ({
   quality: AvatarQuality.Low,
   avatarName: "Ann_Therapist_public",
   knowledgeId: undefined,
+  ...(systemPrompt ? { knowledgeBase: systemPrompt } : {}),
   voice: {
     rate: 1.5,
     emotion: VoiceEmotion.EXCITED,
@@ -39,7 +34,6 @@ const createDefaultConfig = (
   sttSettings: {
     provider: STTProvider.DEEPGRAM,
   },
-  ...(systemPrompt ? { systemPrompt } : {}),
 });
 
 type InteractiveAvatarProps = {
@@ -110,7 +104,10 @@ function InteractiveAvatar({ systemPrompt }: InteractiveAvatarProps) {
       const startConfig = createDefaultConfig(sanitizedSystemPrompt);
 
       if (sanitizedSystemPrompt) {
-        console.log("Using system prompt for session", sanitizedSystemPrompt);
+        console.log(
+          "Applying system prompt as knowledgeBase",
+          sanitizedSystemPrompt,
+        );
       }
 
       await startAvatar(startConfig);
