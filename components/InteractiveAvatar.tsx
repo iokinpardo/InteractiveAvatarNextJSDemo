@@ -13,7 +13,6 @@ import { useEffect, useRef } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
-import { MessageHistory } from "./AvatarSession/MessageHistory";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
 import { useVoiceChat } from "./logic/useVoiceChat";
 import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
@@ -141,7 +140,7 @@ function InteractiveAvatar({ systemPrompt }: InteractiveAvatarProps) {
   }, [mediaStream, stream]);
 
   return (
-    <div className="w-full max-w-[900px] space-y-4">
+    <div className="w-full max-w-[900px]">
       <div className="relative w-full aspect-video overflow-hidden rounded-3xl bg-zinc-900">
         <AvatarVideo ref={mediaStream} />
         {sessionState !== StreamingAvatarSessionState.CONNECTED && (
@@ -150,12 +149,6 @@ function InteractiveAvatar({ systemPrompt }: InteractiveAvatarProps) {
             <span className="text-sm text-zinc-300">Starting voice chat…</span>
           </div>
         )}
-      </div>
-      <div className="rounded-3xl bg-zinc-900/70 p-4">
-        <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-zinc-400">
-          Conversation Transcript
-        </h2>
-        <MessageHistory />
       </div>
     </div>
   );
