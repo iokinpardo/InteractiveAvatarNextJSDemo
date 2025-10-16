@@ -1,7 +1,5 @@
 "use client";
 
-import type { ReactElement } from "react";
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -42,7 +40,7 @@ function formatTimestamp(ts: number): string {
   }).format(ts);
 }
 
-export default function HostControlPage(): ReactElement {
+export default function HostControlPage(): JSX.Element {
   const params = useSearchParams();
   const session = params.get("session") ?? undefined;
   const encodedWss = params.get("wss") ?? undefined;
