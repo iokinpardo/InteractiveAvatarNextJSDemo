@@ -491,3 +491,15 @@ export default function AvatarPage(): ReactElement {
     </div>
   );
 }
+
+export default function AvatarPage(): ReactElement {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-4 text-sm text-neutral-500">Cargando avatar…</div>
+      }
+    >
+      <AvatarPageContent />
+    </Suspense>
+  );
+}
