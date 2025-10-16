@@ -7,7 +7,7 @@ const DOCUMENTATION_LINK =
 type PageSearchParams = Record<string, string | string[] | undefined>;
 
 type PageProps = {
-  searchParams?: Promise<PageSearchParams> | PageSearchParams;
+  searchParams?: Promise<PageSearchParams>;
 };
 
 const extractParam = (value?: string | string[]): string | undefined => {
@@ -19,7 +19,8 @@ const extractParam = (value?: string | string[]): string | undefined => {
 };
 
 export default async function App({ searchParams }: PageProps) {
-  const resolvedSearchParams = (await Promise.resolve(searchParams)) ?? {};
+  const resolvedSearchParams =
+    (searchParams ? await searchParams : undefined) ?? {};
   const systemPrompt = extractParam(resolvedSearchParams.systemPrompt)?.trim();
 
   return (
