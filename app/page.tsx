@@ -38,6 +38,19 @@ export default async function App({ searchParams }: PageProps) {
           <FilePdfIcon className="h-6 w-6 text-red-400" />
           <span>Basic report</span>
         </a>
+        {systemPrompt ? (
+          <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3 text-sm">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Active system prompt
+            </p>
+            <p className="mb-2 text-xs text-zinc-400">
+              Forwarded to HeyGen as the custom knowledge base for this session.
+            </p>
+            <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-zinc-950/60 p-3 text-xs text-zinc-200">
+              {systemPrompt}
+            </pre>
+          </div>
+        ) : null}
       </aside>
       <div className="flex w-full justify-center lg:justify-start">
         <InteractiveAvatar systemPrompt={systemPrompt} />
