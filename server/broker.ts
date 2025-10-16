@@ -62,11 +62,11 @@ export class Broker {
     }
 
     // Cancel pending commands awaiting ACKs from this host
-    this.pending.forEach((pending, id) => {
+    for (const [id, pending] of this.pending) {
       if (pending.host === client.ws) {
         this.clearPending(id, false, "host_disconnected");
       }
-    });
+    }
   }
 
   handleCommand(client: Client, message: CommandMessage): void {
@@ -132,11 +132,11 @@ export class Broker {
       ts: state.ts ?? Date.now(),
     };
 
-    room.forEach((target) => {
+    for (const target of room) {
       if (target.role === "host") {
         safeSend(target.ws, payload);
       }
-    });
+    }
     this.log("state", client.session, state.scene ?? "unknown", {});
   }
 
