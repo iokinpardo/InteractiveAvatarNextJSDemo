@@ -17,7 +17,7 @@ export const MessageHistory: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className="w-[600px] overflow-y-auto flex flex-col gap-2 px-2 py-2 text-white self-center max-h-[150px]"
+      className="flex max-h-60 w-full flex-col gap-2 self-stretch overflow-y-auto px-2 py-2 text-white"
     >
       {messages.map((message) => (
         <div
