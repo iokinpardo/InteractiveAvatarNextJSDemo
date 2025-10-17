@@ -13,7 +13,6 @@ import { useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
-import { MessageHistory } from "./AvatarSession/MessageHistory";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
 import { useVoiceChat } from "./logic/useVoiceChat";
 import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
@@ -211,7 +210,7 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
   }, [mediaStream, stream]);
 
   return (
-    <div className="w-full max-w-[900px] space-y-4">
+    <div className="w-full max-w-[900px]">
       <div className="relative w-full aspect-video overflow-hidden rounded-3xl bg-zinc-900">
         <AvatarVideo ref={mediaStream} />
         {sessionState !== StreamingAvatarSessionState.CONNECTED ? (
