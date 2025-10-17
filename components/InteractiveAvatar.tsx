@@ -19,9 +19,17 @@ import { useVoiceChat } from "./logic/useVoiceChat";
 import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
 import { LoadingIcon } from "./Icons";
 
-const createDefaultConfig = (systemPrompt?: string): StartAvatarRequest => ({
+type CreateDefaultConfigArgs = {
+  systemPrompt?: string;
+  avatarId?: string;
+};
+
+const createDefaultConfig = ({
+  systemPrompt,
+  avatarId,
+}: CreateDefaultConfigArgs): StartAvatarRequest => ({
   quality: AvatarQuality.Low,
-  avatarName: "Ann_Therapist_public",
+  avatarName: avatarId ?? "Ann_Therapist_public",
   knowledgeId: undefined,
   ...(systemPrompt ? { knowledgeBase: systemPrompt } : {}),
   voice: {
@@ -38,9 +46,10 @@ const createDefaultConfig = (systemPrompt?: string): StartAvatarRequest => ({
 
 type InteractiveAvatarProps = {
   systemPrompt?: string;
+  avatarId?: string;
 };
 
-function InteractiveAvatar({ systemPrompt }: InteractiveAvatarProps) {
+function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
@@ -101,13 +110,21 @@ function InteractiveAvatar({ systemPrompt }: InteractiveAvatarProps) {
       });
 
       const sanitizedSystemPrompt = systemPrompt?.trim() || undefined;
-      const startConfig = createDefaultConfig(sanitizedSystemPrompt);
+      const sanitizedAvatarId = avatarId?.trim() || undefined;
+      const startConfig = createDefaultConfig({
+        systemPrompt: sanitizedSystemPrompt,
+        avatarId: sanitizedAvatarId,
+      });
 
       if (sanitizedSystemPrompt) {
         console.log(
           "Applying system prompt as knowledgeBase",
           sanitizedSystemPrompt,
         );
+      }
+
+      if (sanitizedAvatarId) {
+        console.log("Using avatar override", sanitizedAvatarId);
       }
 
       await startAvatar(startConfig);
@@ -160,14 +177,16 @@ function InteractiveAvatar({ systemPrompt }: InteractiveAvatarProps) {
 
 type InteractiveAvatarWrapperProps = {
   systemPrompt?: string;
+  avatarId?: string;
 };
 
 export default function InteractiveAvatarWrapper({
   systemPrompt,
+  avatarId,
 }: InteractiveAvatarWrapperProps) {
   return (
     <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
-      <InteractiveAvatar systemPrompt={systemPrompt} />
+      <InteractiveAvatar avatarId={avatarId} systemPrompt={systemPrompt} />
     </StreamingAvatarProvider>
   );
 }
