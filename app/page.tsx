@@ -21,7 +21,10 @@ const extractParam = (value?: string | string[]): string | undefined => {
 export default async function App({ searchParams }: PageProps) {
   const resolvedSearchParams =
     (searchParams ? await searchParams : undefined) ?? {};
-  const systemPrompt = extractParam(resolvedSearchParams.systemPrompt)?.trim();
+  const systemPrompt = (
+    extractParam(resolvedSearchParams.systemPrompt) ??
+    extractParam(resolvedSearchParams.system_prompt)
+  )?.trim();
 
   return (
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-4 py-6 lg:flex-row lg:items-start">
