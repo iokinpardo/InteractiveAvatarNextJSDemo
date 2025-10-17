@@ -9,6 +9,65 @@ type IconSvgProps = {
   className?: string;
 };
 
+export function FilePdfIcon({
+  size = 24,
+  width,
+  height,
+  ...props
+}: IconSvgProps) {
+  return (
+    <svg
+      fill="none"
+      height={height ?? size}
+      viewBox="0 0 24 24"
+      width={width ?? size}
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M14 2H6a2 2 0 0 0-2 2v16c0 1.105.895 2 2 2h12a2 2 0 0 0 2-2V9.657a2 2 0 0 0-.586-1.414l-5.657-5.657A2 2 0 0 0 14 2Z"
+        fill="currentColor"
+        opacity="0.2"
+      />
+      <path
+        d="M14 2v4a2 2 0 0 0 2 2h4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M8 16v-4h1.4a1.1 1.1 0 0 1 0 2.2H8"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M11.5 12H13a1.5 1.5 0 1 1 0 3H11.5V12Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M16.5 12H15v4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M16.5 14h-1.4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
 export function GithubIcon({
   size = 24,
   width,
