@@ -1,42 +1,115 @@
-# HeyGen Interactive Avatar NextJS Demo
+# HeyGen Interactive Avatar Next.js Demo
+
+This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access tokens through a serverless route, and renders the video feed alongside conversation transcripts, voice-chat status, and diagnostics for easy experimentation.
 
 ![HeyGen Interactive Avatar NextJS Demo Screenshot](./public/demo.png)
 
-This is a sample project and was bootstrapped using [NextJS](https://nextjs.org/).
-Feel free to play around with the existing code and please leave any feedback for the SDK [here](https://github.com/HeyGen-Official/StreamingAvatarSDK/discussions).
+## Highlights
 
-## Getting Started FAQ
+- **Dynamic session configuration** – The page accepts `systemPrompt` and `avatarId` (or `avatar_id`) query parameters, trims them, and forwards the values into the avatar start request so Recall-style integrations can drive both the knowledge base and the persona from the URL.
+- **Secure token exchange** – Access tokens are fetched on demand from the `/api/get-access-token` route, which calls the HeyGen Streaming API with your `HEYGEN_API_KEY`.
+- **Voice chat automation** – The client attempts to open microphone streaming immediately after the avatar connects and surfaces a retry banner if permissions or devices fail.
+- **Conversation transcript & diagnostics** – User/agent messages accumulate in a scrollable transcript while the video overlay reports connection quality and exposes a stop button.
+- **Hook-based session state** – Reusable hooks wrap the Streaming Avatar SDK to manage media streams, message assembly, connection quality, and voice chat in React context.
+- **Composable control surfaces** – Ready-made components for avatar/voice configuration, text chat, and microphone toggles can be embedded when you need operator controls.
+- **Text task helpers** – Utility hooks expose `TaskType.TALK` and `TaskType.REPEAT` flows for synchronous or asynchronous text-driven interactions.
 
-### Setting up the demo
+## How it works
 
-1. Clone this repo
+1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
+2. **The client requests a streaming token** from `/api/get-access-token`, which calls `v1/streaming.create_token` using your HeyGen API key and base URL.
+3. **A `StreamingAvatar` instance is created**, listeners are attached for stream readiness, connection drops, voice activity, and message events, and the session enters the connecting state.
+4. **Message events are coalesced per speaker** and stored in context, giving the transcript component a steady stream of updates without duplicated rows.
+5. **Voice chat starts automatically**; if it fails, the UI exposes controls that retry microphone streaming while keeping the avatar session alive.
+6. **The media stream binds to the `<video>` tag** and displays connection quality plus a stop control for graceful shutdown.
 
-2. Navigate to the repo folder in your terminal
+## URL parameters
 
-3. Run `npm install` (assuming you have npm installed. If not, please follow these instructions: https://docs.npmjs.com/downloading-and-installing-node-js-and-npm/)
+- `systemPrompt` or `system_prompt` – Sent as the session knowledge base so the avatar can follow custom instructions.
+- `avatarId` or `avatar_id` – Overrides the default avatar ID before `createStartAvatar` runs.
 
-4. Enter your HeyGen Enterprise API Token in the `.env` file. Replace `HEYGEN_API_KEY` with your API key. This will allow the Client app to generate secure Access Tokens with which to create interactive sessions.
+Public avatar IDs such as `Ann_Therapist_public`, `Shawn_Therapist_public`, `Bryan_FitnessCoach_public`, `Dexter_Doctor_Standing2_public`, and `Elenora_IT_Sitting_public` are included for quick testing, and you can substitute any custom ID you own.
 
-   You can retrieve either the API Key by logging in to HeyGen and navigating to this page in your settings: [https://app.heygen.com/settings?from=&nav=Subscriptions%20%26%20API]. 
+## Project structure
 
-5. (Optional) If you would like to use the OpenAI features, enter your OpenAI Api Key in the `.env` file.
+- `app/` – Route handlers (`page.tsx`), the streaming token API route, and global layout/font configuration.
+- `components/InteractiveAvatar.tsx` – Entry component that wraps the provider, fetches tokens, initializes the avatar, and renders the primary UI shell.
+- `components/AvatarSession/` – Video player, transcript, microphone toggle, text input, and control toggle components for composing the in-session experience.
+- `components/logic/` – Context provider and React hooks that expose session lifecycle, voice chat, message history, conversation state, interrupts, and text tasks.
+- `components/AvatarConfig/` – Optional configuration panel components (fields, selects, avatar pickers, voice/STT toggles) ready to drop into an admin surface.
+- `app/lib/constants.ts` – Shared avatar catalog and STT language options used by the configuration UI.
+- `styles/globals.css` & `tailwind.config.js` – Tailwind setup, font aliases, and baseline list styling for the app shell.
 
-6. Run `npm run dev`
+## Environment variables
 
-### Starting sessions
+Create a `.env.local` file (or equivalent in your hosting platform) with:
 
-NOTE: Make sure you have enter your token into the `.env` file and run `npm run dev`.
+```dotenv
+HEYGEN_API_KEY=sk_live_your_key_here      # Required for /api/get-access-token
+NEXT_PUBLIC_BASE_API_URL=https://api.heygen.com
+```
 
-To start your 'session' with a Interactive Avatar, first click the 'start' button. If your HeyGen API key is entered into the Server's .env file, then you should see our demo Interactive Avatar appear.
+`HEYGEN_API_KEY` authorizes the token-minting route, while `NEXT_PUBLIC_BASE_API_URL` tells the client SDK which HeyGen region to use when opening the WebRTC session.
 
-If you want to see a different Avatar or try a different voice, you can close the session and enter the IDs and then 'start' the session again. Please see below for information on where to retrieve different Avatar and voice IDs that you can use.
+If you plan to use the optional OpenAI-powered helpers, also define `OPENAI_API_KEY`.
 
-### Which Avatars can I use with this project?
+## Getting started
 
-By default, there are several Public Avatars that can be used in Interactive Avatar. (AKA Interactive Avatars.) You can find the Avatar IDs for these Public Avatars by navigating to [labs.heygen.com/interactive-avatar](https://labs.heygen.com/interactive-avatar) and clicking 'Select Avatar' and copying the avatar id.
+1. Install dependencies with your preferred package manager (`pnpm install`, `npm install`, etc.).
+2. Add the environment variables above to `.env.local`.
+3. Start the development server:
 
-You can create your own custom Interactive Avatars at labs.heygen.com/interactive-avatar by clicking 'create interactive avatar' on the top-left of the screen.
+   ```bash
+   npm run dev
+   ```
 
-### Where can I read more about enterprise-level usage of the Interactive Avatar API?
+   The script is defined in `package.json`, so `pnpm dev` or `yarn dev` will work as well.
 
-Please read our Interactive Avatar 101 article for more information on pricing: https://help.heygen.com/en/articles/9182113-interactive-avatar-101-your-ultimate-guide
+4. Build or lint as needed:
+
+   ```bash
+   npm run build   # Production bundle
+   npm run start   # Serve the production build
+   npm run lint    # ESLint checks
+   ```
+
+## Using the demo
+
+- When the page loads it automatically fetches a token, initializes `StreamingAvatar`, attaches SDK event listeners, and transitions to the connected state once media is ready.
+- If voice chat fails to start (permissions or device issues), a warning banner explains the issue and offers a retry button; retries only affect voice chat, not the avatar session.
+- User and avatar utterances stream into the transcript view, which groups consecutive text from the same speaker for readability and autoscrolls to the latest message.
+- The video canvas displays connection quality and exposes a close button that stops the avatar gracefully by calling `stopAvatar`.
+- Optional UI pieces—`AvatarControls`, `AudioInput`, and `TextInput`—let you toggle voice/text chat, mute or unmute the microphone, and send scripted prompts (async/sync talk or repeat tasks).
+- The `useVoiceChat`, `useInterrupt`, and `useConversationState` hooks expose imperative helpers for microphone control, cutting off avatar speech, and driving listening indicators in custom UIs.
+- All session state—stream handles, voice chat flags, message history, and connection quality—lives inside `StreamingAvatarProvider`, so any component can consume it via the context hooks.
+
+## Extending the experience
+
+- Update `createDefaultConfig` to change the default avatar, video quality, voice rate/emotion/model, target language, or STT provider globally.
+- Mount `AvatarConfig` in your UI to offer runtime controls for avatar IDs, voice settings, languages, and transport choices without editing code.
+- Expand the preset avatar or language lists by editing `AVATARS` and `STT_LANGUAGE_LIST`.
+- Build custom dashboards or overlays by reading from the shared context (messages, voice chat state, connection quality) and styling them with Tailwind utilities or your own CSS.
+
+## Modifying the avatar in a Recall bot configuration
+
+The Next.js entry page reads both `systemPrompt` and `avatarId` (or `avatar_id`) from the query string, trims them, and hands the values to the `InteractiveAvatar` component before it renders the session.
+
+Inside `createDefaultConfig`, the selected ID is applied to the `avatarName` field (falling back to `Ann_Therapist_public` when no override is provided) and the `systemPrompt` is forwarded as the session knowledge base.
+
+To change the avatar for your Recall configuration you can update the URL to something like:
+
+```
+https://interactiveavatarnextjsdemo-rfuq.onrender.com?systemPrompt=you%20speak%20just%20in%20poem%20format&avatarId=Shawn_Therapist_public
+```
+
+Any of the bundled public IDs—such as `Shawn_Therapist_public`, `Bryan_FitnessCoach_public`, or your own custom avatar—will work; the curated list in `app/lib/constants.ts` is a quick reference when you need an ID.
+
+If you want a different default avatar, quality, voice model, or speech-to-text provider for every session, adjust the `createDefaultConfig` implementation (e.g., change `voice.model`, `voice.emotion`, `quality`, or `sttSettings.provider`).
+
+For richer runtime controls you can also compose the existing `AvatarConfig`, `AvatarControls`, `AudioInput`, or `TextInput` components into the UI to expose avatar, voice, and transport settings to operators.
+
+Finally, be sure your deployment still provides the HeyGen API credentials—`HEYGEN_API_KEY` and `NEXT_PUBLIC_BASE_API_URL`—because the client fetches a short-lived access token from `/api/get-access-token` before it starts the stream.
+
+## Testing
+
+⚠️ Not run (QA review only)
