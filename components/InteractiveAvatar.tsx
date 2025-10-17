@@ -9,7 +9,7 @@ import {
   STTProvider,
   ElevenLabsModel,
 } from "@heygen/streaming-avatar";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
@@ -56,6 +56,20 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
 
   const mediaStream = useRef<HTMLVideoElement>(null);
   const hasStarted = useRef(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [voiceChatWarning, setVoiceChatWarning] = useState<string | null>(null);
+
+  const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    if (typeof error === "string") {
+      return error;
+    }
+
+    return "Unknown error occurred.";
+  };
 
   async function fetchAccessToken() {
     try {
@@ -63,8 +77,6 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
         method: "POST",
       });
       const token = await response.text();
-
-      console.log("Access Token:", token); // Log the token to verify
 
       return token;
     } catch (error) {
@@ -75,6 +87,9 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
 
   const startSession = useMemoizedFn(async () => {
     try {
+      setSessionError(null);
+      setVoiceChatWarning(null);
+
       const newToken = await fetchAccessToken();
       const avatar = initAvatar(newToken);
 
@@ -128,9 +143,50 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
       }
 
       await startAvatar(startConfig);
-      await startVoiceChat();
+
+      try {
+        await startVoiceChat();
+        setVoiceChatWarning(null);
+      } catch (voiceChatError) {
+        const warningMessage =
+          "Voice chat could not start automatically. The avatar is running without microphone input.";
+
+        console.warn(warningMessage, voiceChatError);
+        setVoiceChatWarning(
+          `${warningMessage} (${getErrorMessage(voiceChatError)})`,
+        );
+      }
     } catch (error) {
+      hasStarted.current = false;
+      const message = getErrorMessage(error);
+
+      setSessionError(message);
       console.error("Error starting avatar session:", error);
+    }
+  });
+
+  const handleRetrySession = useMemoizedFn(() => {
+    if (sessionState === StreamingAvatarSessionState.CONNECTING) {
+      return;
+    }
+
+    hasStarted.current = true;
+    startSession();
+  });
+
+  const handleRetryVoiceChat = useMemoizedFn(async () => {
+    if (sessionState !== StreamingAvatarSessionState.CONNECTED) {
+      return;
+    }
+
+    try {
+      await startVoiceChat();
+      setVoiceChatWarning(null);
+    } catch (error) {
+      const retryMessage = "Voice chat is still unavailable.";
+
+      console.warn(retryMessage, error);
+      setVoiceChatWarning(`${retryMessage} (${getErrorMessage(error)})`);
     }
   });
 
@@ -158,13 +214,48 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
     <div className="w-full max-w-[900px] space-y-4">
       <div className="relative w-full aspect-video overflow-hidden rounded-3xl bg-zinc-900">
         <AvatarVideo ref={mediaStream} />
-        {sessionState !== StreamingAvatarSessionState.CONNECTED && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-zinc-900">
-            <LoadingIcon className="animate-spin" />
-            <span className="text-sm text-zinc-300">Starting voice chat…</span>
+        {sessionState !== StreamingAvatarSessionState.CONNECTED ? (
+          <div
+            aria-live="polite"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-zinc-950/90 px-6 text-center"
+          >
+            {sessionError ? (
+              <>
+                <span className="text-sm font-semibold text-red-200">
+                  Unable to start the avatar session
+                </span>
+                <p className="text-xs text-red-200/80">{sessionError}</p>
+                <button
+                  className="rounded-full border border-red-400/40 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-100 transition hover:border-red-300 hover:bg-red-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200"
+                  type="button"
+                  onClick={handleRetrySession}
+                >
+                  Try again
+                </button>
+              </>
+            ) : (
+              <>
+                <LoadingIcon className="animate-spin" />
+                <span className="text-sm text-zinc-300">
+                  Connecting to the avatar…
+                </span>
+              </>
+            )}
           </div>
-        )}
+        ) : null}
       </div>
+      {voiceChatWarning ? (
+        <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <p className="mb-3 text-left">{voiceChatWarning}</p>
+          <button
+            className="rounded-full border border-amber-400/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-100 transition hover:border-amber-300 hover:bg-amber-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
+            type="button"
+            onClick={handleRetryVoiceChat}
+          >
+            Retry voice chat
+          </button>
+        </div>
+      ) : null}
       <div className="rounded-3xl bg-zinc-900/70 p-4">
         <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-zinc-400">
           Conversation Transcript
