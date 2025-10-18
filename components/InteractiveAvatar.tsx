@@ -22,11 +22,44 @@ import { LoadingIcon } from "./Icons";
 type CreateDefaultConfigArgs = {
   systemPrompt?: string;
   avatarId?: string;
+  voiceOverrides?: VoiceOverrides;
+};
+
+export type VoiceOverrides = Partial<
+  Pick<
+    NonNullable<StartAvatarRequest["voice"]>,
+    "voiceId" | "emotion" | "model"
+  >
+>;
+
+const sanitizeVoiceOverrides = (
+  overrides?: VoiceOverrides,
+): VoiceOverrides | undefined => {
+  if (!overrides) {
+    return undefined;
+  }
+
+  const sanitized: VoiceOverrides = {};
+
+  if (overrides.voiceId?.trim()) {
+    sanitized.voiceId = overrides.voiceId.trim();
+  }
+
+  if (overrides.emotion) {
+    sanitized.emotion = overrides.emotion;
+  }
+
+  if (overrides.model) {
+    sanitized.model = overrides.model;
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 };
 
 const createDefaultConfig = ({
   systemPrompt,
   avatarId,
+  voiceOverrides,
 }: CreateDefaultConfigArgs): StartAvatarRequest => ({
   quality: AvatarQuality.Low,
   avatarName: avatarId ?? "Ann_Therapist_public",
@@ -34,8 +67,9 @@ const createDefaultConfig = ({
   ...(systemPrompt ? { knowledgeBase: systemPrompt } : {}),
   voice: {
     rate: 1.5,
-    emotion: VoiceEmotion.EXCITED,
-    model: ElevenLabsModel.eleven_flash_v2_5,
+    emotion: voiceOverrides?.emotion ?? VoiceEmotion.EXCITED,
+    model: voiceOverrides?.model ?? ElevenLabsModel.eleven_flash_v2_5,
+    ...(voiceOverrides?.voiceId ? { voiceId: voiceOverrides.voiceId } : {}),
   },
   language: "en",
   voiceChatTransport: VoiceChatTransport.WEBSOCKET,
@@ -47,9 +81,14 @@ const createDefaultConfig = ({
 type InteractiveAvatarProps = {
   systemPrompt?: string;
   avatarId?: string;
+  voiceOverrides?: VoiceOverrides;
 };
 
-function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
+function InteractiveAvatar({
+  systemPrompt,
+  avatarId,
+  voiceOverrides,
+}: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
@@ -126,9 +165,12 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
 
       const sanitizedSystemPrompt = systemPrompt?.trim() || undefined;
       const sanitizedAvatarId = avatarId?.trim() || undefined;
+      const sanitizedVoiceOverrides = sanitizeVoiceOverrides(voiceOverrides);
+
       const startConfig = createDefaultConfig({
         systemPrompt: sanitizedSystemPrompt,
         avatarId: sanitizedAvatarId,
+        voiceOverrides: sanitizedVoiceOverrides,
       });
 
       if (sanitizedSystemPrompt) {
@@ -140,6 +182,10 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
 
       if (sanitizedAvatarId) {
         console.log("Using avatar override", sanitizedAvatarId);
+      }
+
+      if (sanitizedVoiceOverrides) {
+        console.log("Applying voice overrides", sanitizedVoiceOverrides);
       }
 
       await startAvatar(startConfig);
