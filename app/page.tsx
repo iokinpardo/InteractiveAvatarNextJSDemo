@@ -1,4 +1,8 @@
-import InteractiveAvatar from "@/components/InteractiveAvatar";
+import { ElevenLabsModel, VoiceEmotion } from "@heygen/streaming-avatar";
+
+import InteractiveAvatar, {
+  type VoiceOverrides,
+} from "@/components/InteractiveAvatar";
 import { FilePdfIcon } from "@/components/Icons";
 
 const DOCUMENTATION_LINK =
@@ -18,6 +22,51 @@ const extractParam = (value?: string | string[]): string | undefined => {
   return value;
 };
 
+const matchEnumParam = <T extends string>(
+  value: string | undefined,
+  enumValues: readonly T[],
+): T | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  return enumValues.find((enumValue) => enumValue.toLowerCase() === normalized);
+};
+
+const buildVoiceOverrides = (
+  params: PageSearchParams,
+): VoiceOverrides | undefined => {
+  const rawVoiceId =
+    extractParam(params.voiceId) ?? extractParam(params.voice_id);
+  const voiceId = rawVoiceId?.trim();
+
+  const rawEmotion =
+    extractParam(params.voiceEmotion) ?? extractParam(params.voice_emotion);
+  const emotion = matchEnumParam(rawEmotion, Object.values(VoiceEmotion));
+
+  const rawModel =
+    extractParam(params.voiceModel) ?? extractParam(params.voice_model);
+  const model = matchEnumParam(rawModel, Object.values(ElevenLabsModel));
+
+  const overrides: VoiceOverrides = {};
+
+  if (voiceId) {
+    overrides.voiceId = voiceId;
+  }
+
+  if (emotion) {
+    overrides.emotion = emotion;
+  }
+
+  if (model) {
+    overrides.model = model;
+  }
+
+  return Object.keys(overrides).length > 0 ? overrides : undefined;
+};
+
 export default async function App({ searchParams }: PageProps) {
   const resolvedSearchParams =
     (searchParams ? await searchParams : undefined) ?? {};
@@ -29,6 +78,7 @@ export default async function App({ searchParams }: PageProps) {
     extractParam(resolvedSearchParams.avatarId) ??
     extractParam(resolvedSearchParams.avatar_id);
   const avatarId = rawAvatarId?.trim();
+  const voiceOverrides = buildVoiceOverrides(resolvedSearchParams);
 
   return (
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-4 py-6 lg:flex-row lg:items-start">
@@ -73,7 +123,11 @@ export default async function App({ searchParams }: PageProps) {
         ) : null}
       </aside>
       <div className="flex w-full justify-center lg:justify-start">
-        <InteractiveAvatar avatarId={avatarId} systemPrompt={systemPrompt} />
+        <InteractiveAvatar
+          avatarId={avatarId}
+          systemPrompt={systemPrompt}
+          voiceOverrides={voiceOverrides}
+        />
       </div>
     </div>
   );

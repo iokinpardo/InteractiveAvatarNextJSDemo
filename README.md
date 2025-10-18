@@ -14,6 +14,21 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Composable control surfaces** – Ready-made components for avatar/voice configuration, text chat, and microphone toggles can be embedded when you need operator controls.
 - **Text task helpers** – Utility hooks expose `TaskType.TALK` and `TaskType.REPEAT` flows for synchronous or asynchronous text-driven interactions.
 
+## Features
+
+### Voice overrides via query parameters
+
+- **Purpose:** Allow integrators to adjust the ElevenLabs voice used by the avatar without editing code by providing URL parameters.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?voiceId=JBFMnGpgU6AHerx5XYvY&voiceEmotion=soothing&voiceModel=eleven_multilingual_v2
+  ```
+
+- **Supported emotions:** `excited`, `serious`, `friendly`, `soothing`, `broadcaster`.
+- **Supported ElevenLabs models:** `eleven_flash_v2_5`, `eleven_multilingual_v2`.
+- **Dependencies / breaking changes:** Relies on the enumerations exported by `@heygen/streaming-avatar`; defaults remain unchanged when parameters are omitted or invalid.
+
 ## How it works
 
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
