@@ -315,15 +315,21 @@ function InteractiveAvatar({
 type InteractiveAvatarWrapperProps = {
   systemPrompt?: string;
   avatarId?: string;
+  voiceOverrides?: VoiceOverrides;
 };
 
 export default function InteractiveAvatarWrapper({
   systemPrompt,
   avatarId,
+  voiceOverrides,
 }: InteractiveAvatarWrapperProps) {
   return (
     <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
-      <InteractiveAvatar avatarId={avatarId} systemPrompt={systemPrompt} />
+      <InteractiveAvatar
+        avatarId={avatarId}
+        systemPrompt={systemPrompt}
+        voiceOverrides={voiceOverrides}
+      />
     </StreamingAvatarProvider>
   );
 }
