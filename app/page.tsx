@@ -144,6 +144,7 @@ export default async function App({ searchParams }: PageProps) {
       <div className="flex w-full justify-center lg:justify-start">
         <InteractiveAvatar
           avatarId={avatarId}
+          expertName={selectedExpert}
           systemPrompt={systemPrompt}
           voiceOverrides={voiceOverrides}
         />
