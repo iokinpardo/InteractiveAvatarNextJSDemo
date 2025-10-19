@@ -16,6 +16,18 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 ## Features
 
+### Expert presets via query parameter
+
+- **Feature name:** Expert presets via `expert` query parameter.
+- **Purpose / What it does:** Selects a preconfigured avatar profile for marketing (default) or finance, bundling avatar ID, system prompt, and voice defaults without requiring additional query parameters.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?expert=finance
+  ```
+
+- **Dependencies / breaking changes:** No breaking changes; `marketing` remains the default preset so existing URLs continue to work without specifying `expert`.
+
 ### Voice overrides via query parameters
 
 - **Purpose:** Allow integrators to adjust the ElevenLabs voice used by the avatar without editing code by providing URL parameters.
@@ -40,6 +52,7 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 ## URL parameters
 
+- `expert` – Chooses a preset avatar profile. Supported values: `marketing` (default) and `finance`.
 - `systemPrompt` or `system_prompt` – Sent as the session knowledge base so the avatar can follow custom instructions.
 - `avatarId` or `avatar_id` – Overrides the default avatar ID before `createStartAvatar` runs.
 
