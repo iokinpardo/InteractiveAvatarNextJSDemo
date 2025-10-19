@@ -41,6 +41,18 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Supported ElevenLabs models:** `eleven_flash_v2_5`, `eleven_multilingual_v2`.
 - **Dependencies / breaking changes:** Relies on the enumerations exported by `@heygen/streaming-avatar`; defaults remain unchanged when parameters are omitted or invalid.
 
+### Seamless expert transitions
+
+- **Feature name:** Seamless expert transitions with auto-cleanup.
+- **Purpose / What it does:** Ensures any active streaming session is stopped before a new expert preset starts and surfaces a dynamic “connecting {expert}…” overlay while the new video feed comes online.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?expert=finance → switch to …?expert=marketing
+  ```
+
+- **Dependencies / breaking changes:** No breaking changes; the fallback “Connecting to the avatar…” message still appears when no expert preset is active.
+
 ## How it works
 
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
