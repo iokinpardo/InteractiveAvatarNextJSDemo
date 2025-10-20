@@ -53,6 +53,13 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 - **Dependencies / breaking changes:** No breaking changes; the fallback “Connecting to the avatar…” message still appears when no expert preset is active.
 
+### Prominent stop session control
+
+- **Feature name:** Prominent stop session control.
+- **Purpose / What it does:** Highlights the stop control with a labeled red button so operators can immediately end the streaming session, including during connection handoffs.
+- **Usage example:** Click the **Stop** button in the top-right corner of the video canvas to terminate the active expert.
+- **Dependencies / breaking changes:** No breaking changes; the control simply invokes the existing `stopAvatar` hook.
+
 ## How it works
 
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
