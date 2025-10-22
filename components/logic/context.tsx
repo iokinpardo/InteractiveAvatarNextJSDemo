@@ -3,7 +3,13 @@ import StreamingAvatar, {
   StreamingTalkingMessageEvent,
   UserTalkingMessageEvent,
 } from "@heygen/streaming-avatar";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+
+import {
+  buildNormalizedWakeWordList,
+  findMatchingWakeWord,
+  normalizeWakeWord,
+} from "@/app/lib/wakeWords";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -61,6 +67,15 @@ type StreamingAvatarContextProps = {
 
   connectionQuality: ConnectionQuality;
   setConnectionQuality: (connectionQuality: ConnectionQuality) => void;
+
+  wakeWord?: string;
+  wakeWords: string[];
+  activeWakeWord: string | null;
+  setActiveWakeWord: (wakeWord: string | null) => void;
+  evaluateWakeWord: (message: string) => void;
+  resetWakeWord: () => void;
+  isWakeWordRequired: boolean;
+  isWakeWordActive: boolean;
 };
 
 const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
@@ -89,6 +104,14 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     setIsAvatarTalking: () => {},
     connectionQuality: ConnectionQuality.UNKNOWN,
     setConnectionQuality: () => {},
+    wakeWord: undefined,
+    wakeWords: [],
+    activeWakeWord: null,
+    setActiveWakeWord: () => {},
+    evaluateWakeWord: () => {},
+    resetWakeWord: () => {},
+    isWakeWordRequired: false,
+    isWakeWordActive: true,
   },
 );
 
@@ -121,7 +144,11 @@ const useStreamingAvatarVoiceChatState = () => {
   };
 };
 
-const useStreamingAvatarMessageState = () => {
+const useStreamingAvatarMessageState = ({
+  onUserMessageChunk,
+}: {
+  onUserMessageChunk?: (message: string) => void;
+} = {}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const currentSenderRef = useRef<MessageSender | null>(null);
 
@@ -149,6 +176,8 @@ const useStreamingAvatarMessageState = () => {
         },
       ]);
     }
+
+    onUserMessageChunk?.(detail.message);
   };
 
   const handleStreamingTalkingMessage = ({
@@ -219,20 +248,117 @@ const useStreamingAvatarConnectionQualityState = () => {
   return { connectionQuality, setConnectionQuality };
 };
 
+const useStreamingAvatarWakeWordState = ({
+  wakeWord,
+  wakeWords,
+}: {
+  wakeWord?: string;
+  wakeWords?: string[];
+}) => {
+  const sanitizedWakeWords = useMemo(
+    () =>
+      (wakeWords ?? [])
+        .map((word) => word.trim())
+        .filter((word) => word.length > 0),
+    [wakeWords],
+  );
+  const normalizedWakeWord = useMemo(
+    () => normalizeWakeWord(wakeWord),
+    [wakeWord],
+  );
+  const normalizedWakeWords = useMemo(
+    () => buildNormalizedWakeWordList(wakeWord, sanitizedWakeWords),
+    [wakeWord, sanitizedWakeWords],
+  );
+
+  const [activeWakeWord, setActiveWakeWord] = useState<string | null>(null);
+
+  const evaluateWakeWord = useCallback(
+    (message: string) => {
+      if (!message) {
+        return;
+      }
+
+      const matchedWakeWord = findMatchingWakeWord(
+        message,
+        normalizedWakeWords,
+      );
+
+      if (matchedWakeWord) {
+        setActiveWakeWord(matchedWakeWord);
+      }
+    },
+    [normalizedWakeWords],
+  );
+
+  const resetWakeWord = useCallback(() => {
+    setActiveWakeWord(null);
+  }, []);
+
+  const isWakeWordRequired = Boolean(normalizedWakeWord);
+  const isWakeWordActive = !isWakeWordRequired
+    ? true
+    : activeWakeWord === normalizedWakeWord;
+
+  return {
+    wakeWord,
+    wakeWords: sanitizedWakeWords,
+    activeWakeWord,
+    setActiveWakeWord,
+    evaluateWakeWord,
+    resetWakeWord,
+    isWakeWordRequired,
+    isWakeWordActive,
+  };
+};
+
 export const StreamingAvatarProvider = ({
   children,
   basePath,
+  wakeWord,
+  wakeWords,
 }: {
   children: React.ReactNode;
   basePath?: string;
+  wakeWord?: string;
+  wakeWords?: string[];
 }) => {
   const avatarRef = React.useRef<StreamingAvatar>(null);
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
-  const messageState = useStreamingAvatarMessageState();
+  const wakeWordState = useStreamingAvatarWakeWordState({
+    wakeWord,
+    wakeWords,
+  });
+  const messageState = useStreamingAvatarMessageState({
+    onUserMessageChunk: wakeWordState.evaluateWakeWord,
+  });
   const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
+  const { setIsAvatarTalking } = talkingState;
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
+  const normalizedPrimaryWakeWord = React.useMemo(
+    () => normalizeWakeWord(wakeWord),
+    [wakeWord],
+  );
+
+  React.useEffect(() => {
+    if (!normalizedPrimaryWakeWord) {
+      return;
+    }
+
+    if (
+      wakeWordState.activeWakeWord &&
+      wakeWordState.activeWakeWord !== normalizedPrimaryWakeWord
+    ) {
+      avatarRef.current?.interrupt();
+      setIsAvatarTalking(false);
+    }
+  }, [
+    normalizedPrimaryWakeWord,
+    setIsAvatarTalking,
+    wakeWordState.activeWakeWord,
+  ]);
 
   return (
     <StreamingAvatarContext.Provider
@@ -245,6 +371,7 @@ export const StreamingAvatarProvider = ({
         ...listeningState,
         ...talkingState,
         ...connectionQualityState,
+        ...wakeWordState,
       }}
     >
       {children}

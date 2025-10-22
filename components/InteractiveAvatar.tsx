@@ -16,7 +16,11 @@ import { AvatarVideo } from "./AvatarSession/AvatarVideo";
 import { MessageHistory } from "./AvatarSession/MessageHistory";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
 import { useVoiceChat } from "./logic/useVoiceChat";
-import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
+import {
+  StreamingAvatarProvider,
+  StreamingAvatarSessionState,
+  useStreamingAvatarContext,
+} from "./logic";
 import { LoadingIcon } from "./Icons";
 
 type CreateDefaultConfigArgs = {
@@ -94,6 +98,7 @@ function InteractiveAvatar({
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
+  const { isWakeWordActive, isWakeWordRequired } = useStreamingAvatarContext();
 
   const mediaStream = useRef<HTMLVideoElement>(null);
   const hasStarted = useRef(false);
@@ -268,6 +273,13 @@ function InteractiveAvatar({
     <div className="w-full max-w-[900px]">
       <div className="relative w-full aspect-video overflow-hidden rounded-3xl bg-zinc-900">
         <AvatarVideo ref={mediaStream} />
+        {isWakeWordRequired &&
+        isWakeWordActive &&
+        sessionState === StreamingAvatarSessionState.CONNECTED ? (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-amber-400/90 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-950 shadow-lg">
+            Active
+          </div>
+        ) : null}
         {sessionState !== StreamingAvatarSessionState.CONNECTED ? (
           <div
             aria-live="polite"
@@ -327,6 +339,8 @@ type InteractiveAvatarWrapperProps = {
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
+  wakeWord?: string;
+  wakeWords?: string[];
 };
 
 export default function InteractiveAvatarWrapper({
@@ -334,9 +348,15 @@ export default function InteractiveAvatarWrapper({
   avatarId,
   voiceOverrides,
   expertName,
+  wakeWord,
+  wakeWords,
 }: InteractiveAvatarWrapperProps) {
   return (
-    <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
+    <StreamingAvatarProvider
+      basePath={process.env.NEXT_PUBLIC_BASE_API_URL}
+      wakeWord={wakeWord}
+      wakeWords={wakeWords}
+    >
       <InteractiveAvatar
         avatarId={avatarId}
         expertName={expertName}

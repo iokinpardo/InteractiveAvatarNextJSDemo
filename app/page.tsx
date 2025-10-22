@@ -5,6 +5,7 @@ import InteractiveAvatar, {
 } from "@/components/InteractiveAvatar";
 import { FilePdfIcon } from "@/components/Icons";
 import { AVATAR_PRESETS, resolveExpert } from "@/app/lib/avatarPresets";
+import { expandWakeWordValue } from "@/app/lib/wakeWords";
 
 const DOCUMENTATION_LINK =
   "https://www.antennahouse.com/hubfs/xsl-fo-sample/pdf/basic-link-1.pdf";
@@ -68,6 +69,38 @@ const buildVoiceOverrides = (
   return Object.keys(overrides).length > 0 ? overrides : undefined;
 };
 
+const buildWakeWordConfig = (params: PageSearchParams) => {
+  const rawWakeWord =
+    extractParam(params.wakeWord) ?? extractParam(params.wake_word);
+  const wakeWord = rawWakeWord?.trim();
+
+  const additionalWakeWords = [
+    ...expandWakeWordValue(params.wakeWord),
+    ...expandWakeWordValue(params.wake_word),
+    ...expandWakeWordValue(params.wakeWords),
+    ...expandWakeWordValue(params.wake_words),
+    ...expandWakeWordValue(params["wakeWordList"]),
+    ...expandWakeWordValue(params["wake_word_list"]),
+  ];
+
+  const mergedWakeWords = new Set<string>();
+
+  if (wakeWord) {
+    mergedWakeWords.add(wakeWord);
+  }
+
+  for (const additional of additionalWakeWords) {
+    if (additional.trim()) {
+      mergedWakeWords.add(additional.trim());
+    }
+  }
+
+  return {
+    wakeWord,
+    wakeWords: Array.from(mergedWakeWords),
+  };
+};
+
 export default async function App({ searchParams }: PageProps) {
   const resolvedSearchParams =
     (searchParams ? await searchParams : undefined) ?? {};
@@ -92,6 +125,7 @@ export default async function App({ searchParams }: PageProps) {
     : expertPreset.voiceOverrides
       ? { ...expertPreset.voiceOverrides }
       : undefined;
+  const { wakeWord, wakeWords } = buildWakeWordConfig(resolvedSearchParams);
 
   return (
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-4 py-6 lg:flex-row lg:items-start">
@@ -147,6 +181,8 @@ export default async function App({ searchParams }: PageProps) {
           expertName={selectedExpert}
           systemPrompt={systemPrompt}
           voiceOverrides={voiceOverrides}
+          wakeWord={wakeWord}
+          wakeWords={wakeWords}
         />
       </div>
     </div>
