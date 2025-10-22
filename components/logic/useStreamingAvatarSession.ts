@@ -2,9 +2,10 @@ import StreamingAvatar, {
   ConnectionQuality,
   StartAvatarRequest,
   StreamingEvents,
+  StreamingTalkingMessageEvent,
   type EventHandler,
 } from "@heygen/streaming-avatar";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import {
   StreamingAvatarSessionState,
@@ -30,12 +31,46 @@ export const useStreamingAvatarSession = () => {
     handleEndMessage,
     clearMessages,
     resetWakeWord,
+    isWakeWordRequired,
+    isWakeWordActive,
   } = useStreamingAvatarContext();
   const { stopVoiceChat } = useVoiceChat();
 
   useMessageHistory();
 
   const listenersRef = useRef<Array<[StreamingEvents, EventHandler]>>([]);
+  const wakeWordActiveRef = useRef(isWakeWordActive);
+
+  useEffect(() => {
+    wakeWordActiveRef.current = isWakeWordActive;
+  }, [isWakeWordActive]);
+
+  const isConversationActive = useCallback(() => {
+    if (!isWakeWordRequired) {
+      return true;
+    }
+
+    return wakeWordActiveRef.current;
+  }, [isWakeWordRequired]);
+
+  const handleAvatarTalkingMessage = useCallback(
+    (event: { detail: StreamingTalkingMessageEvent }) => {
+      if (!isConversationActive()) {
+        return;
+      }
+
+      handleStreamingTalkingMessage(event);
+    },
+    [handleStreamingTalkingMessage, isConversationActive],
+  );
+
+  const handleUserEndMessage = useCallback(() => {
+    handleEndMessage();
+
+    if (!isConversationActive()) {
+      avatarRef.current?.interrupt();
+    }
+  }, [avatarRef, handleEndMessage, isConversationActive]);
 
   const init = useCallback(
     (token: string) => {
@@ -141,8 +176,8 @@ export const useStreamingAvatarSession = () => {
       [StreamingEvents.AVATAR_START_TALKING, handleAvatarStartTalking],
       [StreamingEvents.AVATAR_STOP_TALKING, handleAvatarStopTalking],
       [StreamingEvents.USER_TALKING_MESSAGE, handleUserTalkingMessage],
-      [StreamingEvents.AVATAR_TALKING_MESSAGE, handleStreamingTalkingMessage],
-      [StreamingEvents.USER_END_MESSAGE, handleEndMessage],
+      [StreamingEvents.AVATAR_TALKING_MESSAGE, handleAvatarTalkingMessage],
+      [StreamingEvents.USER_END_MESSAGE, handleUserEndMessage],
       [StreamingEvents.AVATAR_END_MESSAGE, handleEndMessage],
     ];
 
@@ -159,7 +194,8 @@ export const useStreamingAvatarSession = () => {
     handleEndMessage,
     handleStream,
     handleStreamDisconnected,
-    handleStreamingTalkingMessage,
+    handleAvatarTalkingMessage,
+    handleUserEndMessage,
     handleUserStart,
     handleUserStop,
     handleUserTalkingMessage,

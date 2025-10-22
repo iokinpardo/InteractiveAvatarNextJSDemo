@@ -97,13 +97,7 @@ function InteractiveAvatar({
 }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
-  const {
-    startVoiceChat,
-    muteInputAudio,
-    unmuteInputAudio,
-    isMuted,
-    isVoiceChatActive,
-  } = useVoiceChat();
+  const { startVoiceChat } = useVoiceChat();
   const { isWakeWordActive, isWakeWordRequired } = useStreamingAvatarContext();
 
   const mediaStream = useRef<HTMLVideoElement>(null);
@@ -210,7 +204,7 @@ function InteractiveAvatar({
       await startAvatar(startConfig);
 
       try {
-        await startVoiceChat(isWakeWordRequired && !isWakeWordActive);
+        await startVoiceChat();
         setVoiceChatWarning(null);
       } catch (voiceChatError) {
         const warningMessage =
@@ -274,25 +268,6 @@ function InteractiveAvatar({
       };
     }
   }, [mediaStream, stream]);
-
-  useEffect(() => {
-    if (!isWakeWordRequired || !isVoiceChatActive) {
-      return;
-    }
-
-    if (isWakeWordActive && isMuted) {
-      unmuteInputAudio();
-    } else if (!isWakeWordActive && !isMuted) {
-      muteInputAudio();
-    }
-  }, [
-    isWakeWordActive,
-    isWakeWordRequired,
-    isVoiceChatActive,
-    isMuted,
-    muteInputAudio,
-    unmuteInputAudio,
-  ]);
 
   return (
     <div className="w-full max-w-[900px]">
