@@ -335,7 +335,30 @@ export const StreamingAvatarProvider = ({
   });
   const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
+  const { setIsAvatarTalking } = talkingState;
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
+  const normalizedPrimaryWakeWord = React.useMemo(
+    () => normalizeWakeWord(wakeWord),
+    [wakeWord],
+  );
+
+  React.useEffect(() => {
+    if (!normalizedPrimaryWakeWord) {
+      return;
+    }
+
+    if (
+      wakeWordState.activeWakeWord &&
+      wakeWordState.activeWakeWord !== normalizedPrimaryWakeWord
+    ) {
+      avatarRef.current?.interrupt();
+      setIsAvatarTalking(false);
+    }
+  }, [
+    normalizedPrimaryWakeWord,
+    setIsAvatarTalking,
+    wakeWordState.activeWakeWord,
+  ]);
 
   return (
     <StreamingAvatarContext.Provider

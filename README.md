@@ -63,7 +63,7 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 ### Wake word activation guard
 
 - **Feature name:** Wake word activation guard.
-- **Purpose / What it does:** Blocks avatar replies until the primary wake word is detected, while still transcribing speech so the activation word can be heard. Once the wake word appears, the UI shows an in-video “Active” badge and the avatar resumes normal conversation. If the user later speaks another configured wake word, the badge disappears and the avatar stops responding until the primary wake word is heard again.
+- **Purpose / What it does:** Blocks avatar replies until the primary wake word is detected, while still transcribing speech so the activation word can be heard. Once the wake word appears, the UI shows an in-video “Active” badge anchored to the bottom-center of the video and the avatar resumes normal conversation. If the user later speaks another configured wake word, the badge disappears, the avatar speech is interrupted immediately, and the bot stops responding until the primary wake word is heard again.
 - **Usage example:**
 
   ```text

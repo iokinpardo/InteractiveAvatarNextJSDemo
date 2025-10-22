@@ -276,7 +276,7 @@ function InteractiveAvatar({
         {isWakeWordRequired &&
         isWakeWordActive &&
         sessionState === StreamingAvatarSessionState.CONNECTED ? (
-          <div className="absolute left-4 top-4 rounded-full bg-amber-400/90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-950 shadow-lg">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-amber-400/90 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-950 shadow-lg">
             Active
           </div>
         ) : null}
