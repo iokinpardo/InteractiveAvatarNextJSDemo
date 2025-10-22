@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
+import { MessageHistory } from "./AvatarSession/MessageHistory";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
 import { useVoiceChat } from "./logic/useVoiceChat";
 import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
@@ -21,11 +22,44 @@ import { LoadingIcon } from "./Icons";
 type CreateDefaultConfigArgs = {
   systemPrompt?: string;
   avatarId?: string;
+  voiceOverrides?: VoiceOverrides;
+};
+
+export type VoiceOverrides = Partial<
+  Pick<
+    NonNullable<StartAvatarRequest["voice"]>,
+    "voiceId" | "emotion" | "model"
+  >
+>;
+
+const sanitizeVoiceOverrides = (
+  overrides?: VoiceOverrides,
+): VoiceOverrides | undefined => {
+  if (!overrides) {
+    return undefined;
+  }
+
+  const sanitized: VoiceOverrides = {};
+
+  if (overrides.voiceId?.trim()) {
+    sanitized.voiceId = overrides.voiceId.trim();
+  }
+
+  if (overrides.emotion) {
+    sanitized.emotion = overrides.emotion;
+  }
+
+  if (overrides.model) {
+    sanitized.model = overrides.model;
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 };
 
 const createDefaultConfig = ({
   systemPrompt,
   avatarId,
+  voiceOverrides,
 }: CreateDefaultConfigArgs): StartAvatarRequest => ({
   quality: AvatarQuality.Low,
   avatarName: avatarId ?? "Ann_Therapist_public",
@@ -33,8 +67,9 @@ const createDefaultConfig = ({
   ...(systemPrompt ? { knowledgeBase: systemPrompt } : {}),
   voice: {
     rate: 1.5,
-    emotion: VoiceEmotion.EXCITED,
-    model: ElevenLabsModel.eleven_flash_v2_5,
+    emotion: voiceOverrides?.emotion ?? VoiceEmotion.EXCITED,
+    model: voiceOverrides?.model ?? ElevenLabsModel.eleven_flash_v2_5,
+    ...(voiceOverrides?.voiceId ? { voiceId: voiceOverrides.voiceId } : {}),
   },
   language: "en",
   voiceChatTransport: VoiceChatTransport.WEBSOCKET,
@@ -46,9 +81,16 @@ const createDefaultConfig = ({
 type InteractiveAvatarProps = {
   systemPrompt?: string;
   avatarId?: string;
+  voiceOverrides?: VoiceOverrides;
+  expertName?: string;
 };
 
-function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
+function InteractiveAvatar({
+  systemPrompt,
+  avatarId,
+  voiceOverrides,
+  expertName,
+}: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
@@ -89,7 +131,13 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
       setSessionError(null);
       setVoiceChatWarning(null);
 
-      const newToken = await fetchAccessToken();
+      const tokenPromise = fetchAccessToken();
+
+      if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
+        await stopAvatar();
+      }
+
+      const newToken = await tokenPromise;
       const avatar = initAvatar(newToken);
 
       avatar.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
@@ -125,9 +173,12 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
 
       const sanitizedSystemPrompt = systemPrompt?.trim() || undefined;
       const sanitizedAvatarId = avatarId?.trim() || undefined;
+      const sanitizedVoiceOverrides = sanitizeVoiceOverrides(voiceOverrides);
+
       const startConfig = createDefaultConfig({
         systemPrompt: sanitizedSystemPrompt,
         avatarId: sanitizedAvatarId,
+        voiceOverrides: sanitizedVoiceOverrides,
       });
 
       if (sanitizedSystemPrompt) {
@@ -139,6 +190,10 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
 
       if (sanitizedAvatarId) {
         console.log("Using avatar override", sanitizedAvatarId);
+      }
+
+      if (sanitizedVoiceOverrides) {
+        console.log("Applying voice overrides", sanitizedVoiceOverrides);
       }
 
       await startAvatar(startConfig);
@@ -236,7 +291,9 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
               <>
                 <LoadingIcon className="animate-spin" />
                 <span className="text-sm text-zinc-300">
-                  Connecting to the avatar…
+                  {expertName?.trim()
+                    ? `connecting ${expertName.trim().toLowerCase()}…`
+                    : "Connecting to the avatar…"}
                 </span>
               </>
             )}
@@ -268,15 +325,24 @@ function InteractiveAvatar({ systemPrompt, avatarId }: InteractiveAvatarProps) {
 type InteractiveAvatarWrapperProps = {
   systemPrompt?: string;
   avatarId?: string;
+  voiceOverrides?: VoiceOverrides;
+  expertName?: string;
 };
 
 export default function InteractiveAvatarWrapper({
   systemPrompt,
   avatarId,
+  voiceOverrides,
+  expertName,
 }: InteractiveAvatarWrapperProps) {
   return (
     <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
-      <InteractiveAvatar avatarId={avatarId} systemPrompt={systemPrompt} />
+      <InteractiveAvatar
+        avatarId={avatarId}
+        expertName={expertName}
+        systemPrompt={systemPrompt}
+        voiceOverrides={voiceOverrides}
+      />
     </StreamingAvatarProvider>
   );
 }
