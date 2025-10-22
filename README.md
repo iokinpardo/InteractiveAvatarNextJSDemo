@@ -60,6 +60,20 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Usage example:** Click the **Stop** button in the top-right corner of the video canvas to terminate the active expert.
 - **Dependencies / breaking changes:** No breaking changes; the control simply invokes the existing `stopAvatar` hook.
 
+### Wake word activation guard
+
+- **Feature name:** Wake word activation guard.
+- **Purpose / What it does:** Keeps the avatar microphone muted until a configured wake word is spoken, then automatically unmutes and shows an in-video “Active” badge. Saying a different wake word deactivates the avatar again, allowing multiple bots to share the same channel safely.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?wakeWord=apollo&wakeWords=apollo,beta,charlie
+  ```
+
+  The avatar stays muted until the user says “apollo”. If the user later says “beta”, the badge disappears and the microphone mutes again.
+
+- **Dependencies / breaking changes:** Requires passing at least one wake word through the query string. Existing URLs without a wake word behave exactly as before, with the avatar remaining active.
+
 ## How it works
 
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.

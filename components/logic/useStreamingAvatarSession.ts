@@ -29,6 +29,7 @@ export const useStreamingAvatarSession = () => {
     handleStreamingTalkingMessage,
     handleEndMessage,
     clearMessages,
+    resetWakeWord,
   } = useStreamingAvatarContext();
   const { stopVoiceChat } = useVoiceChat();
 
@@ -96,6 +97,7 @@ export const useStreamingAvatarSession = () => {
   const stop = useCallback(async () => {
     detachListeners();
     clearMessages();
+    resetWakeWord();
     stopVoiceChat();
     setIsListening(false);
     setIsUserTalking(false);
@@ -109,6 +111,7 @@ export const useStreamingAvatarSession = () => {
     setIsListening,
     stopVoiceChat,
     clearMessages,
+    resetWakeWord,
     setIsUserTalking,
     setIsAvatarTalking,
     setStream,
