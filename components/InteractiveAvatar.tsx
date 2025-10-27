@@ -16,7 +16,11 @@ import { AvatarVideo } from "./AvatarSession/AvatarVideo";
 import { MessageHistory } from "./AvatarSession/MessageHistory";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
 import { useVoiceChat } from "./logic/useVoiceChat";
-import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
+import {
+  StreamingAvatarProvider,
+  StreamingAvatarSessionState,
+  useStreamingAvatarContext,
+} from "./logic";
 import { LoadingIcon } from "./Icons";
 
 type CreateDefaultConfigArgs = {
@@ -82,16 +86,19 @@ type InteractiveAvatarProps = {
   systemPrompt?: string;
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
+  expertName?: string;
 };
 
 function InteractiveAvatar({
   systemPrompt,
   avatarId,
   voiceOverrides,
+  expertName,
 }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
+  const { isWakeWordActive, isWakeWordRequired } = useStreamingAvatarContext();
 
   const mediaStream = useRef<HTMLVideoElement>(null);
   const hasStarted = useRef(false);
@@ -129,7 +136,13 @@ function InteractiveAvatar({
       setSessionError(null);
       setVoiceChatWarning(null);
 
-      const newToken = await fetchAccessToken();
+      const tokenPromise = fetchAccessToken();
+
+      if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
+        await stopAvatar();
+      }
+
+      const newToken = await tokenPromise;
       const avatar = initAvatar(newToken);
 
       avatar.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
@@ -260,6 +273,13 @@ function InteractiveAvatar({
     <div className="w-full max-w-[900px]">
       <div className="relative w-full aspect-video overflow-hidden rounded-3xl bg-zinc-900">
         <AvatarVideo ref={mediaStream} />
+        {isWakeWordRequired &&
+        isWakeWordActive &&
+        sessionState === StreamingAvatarSessionState.CONNECTED ? (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-amber-400/90 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-950 shadow-lg">
+            Active
+          </div>
+        ) : null}
         {sessionState !== StreamingAvatarSessionState.CONNECTED ? (
           <div
             aria-live="polite"
@@ -283,7 +303,9 @@ function InteractiveAvatar({
               <>
                 <LoadingIcon className="animate-spin" />
                 <span className="text-sm text-zinc-300">
-                  Connecting to the avatar…
+                  {expertName?.trim()
+                    ? `connecting ${expertName.trim().toLowerCase()}…`
+                    : "Connecting to the avatar…"}
                 </span>
               </>
             )}
@@ -316,17 +338,28 @@ type InteractiveAvatarWrapperProps = {
   systemPrompt?: string;
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
+  expertName?: string;
+  wakeWord?: string;
+  wakeWords?: string[];
 };
 
 export default function InteractiveAvatarWrapper({
   systemPrompt,
   avatarId,
   voiceOverrides,
+  expertName,
+  wakeWord,
+  wakeWords,
 }: InteractiveAvatarWrapperProps) {
   return (
-    <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
+    <StreamingAvatarProvider
+      basePath={process.env.NEXT_PUBLIC_BASE_API_URL}
+      wakeWord={wakeWord}
+      wakeWords={wakeWords}
+    >
       <InteractiveAvatar
         avatarId={avatarId}
+        expertName={expertName}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
       />

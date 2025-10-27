@@ -16,6 +16,18 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 ## Features
 
+### Expert presets via query parameter
+
+- **Feature name:** Expert presets via `expert` query parameter.
+- **Purpose / What it does:** Selects a preconfigured avatar profile for marketing (default) or finance, bundling avatar ID, system prompt, and voice defaults without requiring additional query parameters.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?expert=finance
+  ```
+
+- **Dependencies / breaking changes:** No breaking changes; `marketing` remains the default preset so existing URLs continue to work without specifying `expert`.
+
 ### Voice overrides via query parameters
 
 - **Purpose:** Allow integrators to adjust the ElevenLabs voice used by the avatar without editing code by providing URL parameters.
@@ -29,6 +41,39 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Supported ElevenLabs models:** `eleven_flash_v2_5`, `eleven_multilingual_v2`.
 - **Dependencies / breaking changes:** Relies on the enumerations exported by `@heygen/streaming-avatar`; defaults remain unchanged when parameters are omitted or invalid.
 
+### Seamless expert transitions
+
+- **Feature name:** Seamless expert transitions with auto-cleanup.
+- **Purpose / What it does:** Ensures any active streaming session is stopped before a new expert preset starts and surfaces a dynamic “connecting {expert}…” overlay while the new video feed comes online.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?expert=finance → switch to …?expert=marketing
+  ```
+
+- **Dependencies / breaking changes:** No breaking changes; the fallback “Connecting to the avatar…” message still appears when no expert preset is active.
+
+### Prominent stop session control
+
+- **Feature name:** Prominent stop session control.
+- **Purpose / What it does:** Highlights the stop control with a labeled red button so operators can immediately end the streaming session, including during connection handoffs.
+- **Usage example:** Click the **Stop** button in the top-right corner of the video canvas to terminate the active expert.
+- **Dependencies / breaking changes:** No breaking changes; the control simply invokes the existing `stopAvatar` hook.
+
+### Wake word activation guard
+
+- **Feature name:** Wake word activation guard.
+- **Purpose / What it does:** Blocks avatar replies until the primary wake word is detected, while still transcribing speech so the activation word can be heard. Once the wake word appears, the UI shows an in-video “Active” badge anchored to the bottom-center of the video and the avatar resumes normal conversation. If the user later speaks another configured wake word, the badge disappears, the avatar speech is interrupted immediately, and the bot stops responding until the primary wake word is heard again.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?wakeWord=apollo&wakeWords=apollo,beta,charlie
+  ```
+
+  The avatar ignores prompts until the user says “apollo”. If the user later says “beta”, the badge disappears, the transcript continues listening for the next activation, and the avatar pauses responses until “apollo” is spoken again.
+
+- **Dependencies / breaking changes:** Requires passing at least one wake word through the query string. Existing URLs without a wake word behave exactly as before, with the avatar remaining active.
+
 ## How it works
 
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
@@ -40,6 +85,7 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 ## URL parameters
 
+- `expert` – Chooses a preset avatar profile. Supported values: `marketing` (default) and `finance`.
 - `systemPrompt` or `system_prompt` – Sent as the session knowledge base so the avatar can follow custom instructions.
 - `avatarId` or `avatar_id` – Overrides the default avatar ID before `createStartAvatar` runs.
 

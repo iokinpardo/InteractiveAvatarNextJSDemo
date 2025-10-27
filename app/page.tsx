@@ -4,6 +4,8 @@ import InteractiveAvatar, {
   type VoiceOverrides,
 } from "@/components/InteractiveAvatar";
 import { FilePdfIcon } from "@/components/Icons";
+import { AVATAR_PRESETS, resolveExpert } from "@/app/lib/avatarPresets";
+import { expandWakeWordValue } from "@/app/lib/wakeWords";
 
 const DOCUMENTATION_LINK =
   "https://www.antennahouse.com/hubfs/xsl-fo-sample/pdf/basic-link-1.pdf";
@@ -67,18 +69,63 @@ const buildVoiceOverrides = (
   return Object.keys(overrides).length > 0 ? overrides : undefined;
 };
 
+const buildWakeWordConfig = (params: PageSearchParams) => {
+  const rawWakeWord =
+    extractParam(params.wakeWord) ?? extractParam(params.wake_word);
+  const wakeWord = rawWakeWord?.trim();
+
+  const additionalWakeWords = [
+    ...expandWakeWordValue(params.wakeWord),
+    ...expandWakeWordValue(params.wake_word),
+    ...expandWakeWordValue(params.wakeWords),
+    ...expandWakeWordValue(params.wake_words),
+    ...expandWakeWordValue(params["wakeWordList"]),
+    ...expandWakeWordValue(params["wake_word_list"]),
+  ];
+
+  const mergedWakeWords = new Set<string>();
+
+  if (wakeWord) {
+    mergedWakeWords.add(wakeWord);
+  }
+
+  for (const additional of additionalWakeWords) {
+    if (additional.trim()) {
+      mergedWakeWords.add(additional.trim());
+    }
+  }
+
+  return {
+    wakeWord,
+    wakeWords: Array.from(mergedWakeWords),
+  };
+};
+
 export default async function App({ searchParams }: PageProps) {
   const resolvedSearchParams =
     (searchParams ? await searchParams : undefined) ?? {};
+  const rawExpert = extractParam(resolvedSearchParams.expert);
+  const selectedExpert = resolveExpert(rawExpert);
+  const expertPreset = AVATAR_PRESETS[selectedExpert];
   const rawSystemPrompt =
     extractParam(resolvedSearchParams.systemPrompt) ??
     extractParam(resolvedSearchParams.system_prompt);
-  const systemPrompt = rawSystemPrompt?.trim();
+  const systemPrompt =
+    rawSystemPrompt?.trim() ?? expertPreset.systemPrompt?.trim();
   const rawAvatarId =
     extractParam(resolvedSearchParams.avatarId) ??
     extractParam(resolvedSearchParams.avatar_id);
-  const avatarId = rawAvatarId?.trim();
-  const voiceOverrides = buildVoiceOverrides(resolvedSearchParams);
+  const avatarId = rawAvatarId?.trim() ?? expertPreset.avatarId?.trim();
+  const queryVoiceOverrides = buildVoiceOverrides(resolvedSearchParams);
+  const voiceOverrides = queryVoiceOverrides
+    ? {
+        ...(expertPreset.voiceOverrides ?? {}),
+        ...queryVoiceOverrides,
+      }
+    : expertPreset.voiceOverrides
+      ? { ...expertPreset.voiceOverrides }
+      : undefined;
+  const { wakeWord, wakeWords } = buildWakeWordConfig(resolvedSearchParams);
 
   return (
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-4 py-6 lg:flex-row lg:items-start">
@@ -95,6 +142,12 @@ export default async function App({ searchParams }: PageProps) {
           <FilePdfIcon className="h-6 w-6 text-red-400" />
           <span>Basic report</span>
         </a>
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3 text-sm">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Active expert preset
+          </p>
+          <p className="text-xs text-zinc-300">{selectedExpert}</p>
+        </div>
         {systemPrompt ? (
           <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3 text-sm">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
@@ -125,8 +178,11 @@ export default async function App({ searchParams }: PageProps) {
       <div className="flex w-full justify-center lg:justify-start">
         <InteractiveAvatar
           avatarId={avatarId}
+          expertName={selectedExpert}
           systemPrompt={systemPrompt}
           voiceOverrides={voiceOverrides}
+          wakeWord={wakeWord}
+          wakeWords={wakeWords}
         />
       </div>
     </div>
