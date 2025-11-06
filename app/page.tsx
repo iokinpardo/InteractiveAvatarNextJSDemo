@@ -94,7 +94,7 @@ export default async function App({ searchParams }: PageProps) {
     extractParam(resolvedSearchParams.narration_mode);
   const narrationMode =
     matchEnumParam(rawNarrationMode, Object.values(NarrationMode)) ??
-    NarrationMode.LLM;
+    NarrationMode.WEBHOOK;
 
   return (
     <div className="mx-auto flex w-full max-w-[900px] justify-center px-4 py-6">

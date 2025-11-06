@@ -1,4 +1,4 @@
 export enum NarrationMode {
-  LLM = "llm",
+  CONVERSATIONAL = "conversational",
   WEBHOOK = "webhook",
 }

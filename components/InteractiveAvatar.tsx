@@ -182,14 +182,17 @@ function InteractiveAvatar({
 
       const startConfig = createDefaultConfig({
         systemPrompt:
-          narrationMode === NarrationMode.LLM
+          narrationMode === NarrationMode.CONVERSATIONAL
             ? sanitizedSystemPrompt
             : undefined,
         avatarId: sanitizedAvatarId,
         voiceOverrides: sanitizedVoiceOverrides,
       });
 
-      if (sanitizedSystemPrompt && narrationMode === NarrationMode.LLM) {
+      if (
+        sanitizedSystemPrompt &&
+        narrationMode === NarrationMode.CONVERSATIONAL
+      ) {
         console.log(
           "Applying system prompt as knowledgeBase",
           sanitizedSystemPrompt,
@@ -206,7 +209,7 @@ function InteractiveAvatar({
 
       await startAvatar(startConfig);
 
-      if (narrationMode === NarrationMode.LLM) {
+      if (narrationMode === NarrationMode.CONVERSATIONAL) {
         try {
           await startVoiceChat();
           setVoiceChatWarning(null);
@@ -239,7 +242,7 @@ function InteractiveAvatar({
   });
 
   const handleRetryVoiceChat = useMemoizedFn(async () => {
-    if (narrationMode !== NarrationMode.LLM) {
+    if (narrationMode !== NarrationMode.CONVERSATIONAL) {
       return;
     }
 
@@ -330,7 +333,7 @@ function InteractiveAvatar({
           </p>
         </div>
       ) : null}
-      {narrationMode === NarrationMode.LLM && voiceChatWarning ? (
+      {narrationMode === NarrationMode.CONVERSATIONAL && voiceChatWarning ? (
         <div className="mt-3 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
           <p className="mb-3 text-left">{voiceChatWarning}</p>
           <button
@@ -359,7 +362,7 @@ export default function InteractiveAvatarWrapper({
   avatarId,
   voiceOverrides,
   expertName,
-  narrationMode = NarrationMode.LLM,
+  narrationMode = NarrationMode.CONVERSATIONAL,
 }: InteractiveAvatarWrapperProps) {
   return (
     <StreamingAvatarProvider

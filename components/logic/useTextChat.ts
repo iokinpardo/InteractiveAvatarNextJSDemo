@@ -2,59 +2,89 @@ import { TaskMode, TaskType } from "@heygen/streaming-avatar";
 import { useCallback } from "react";
 
 import { useStreamingAvatarContext } from "./context";
+import { NarrationMode } from "./narrationMode";
 
 export const useTextChat = () => {
-  const { avatarRef } = useStreamingAvatarContext();
+  const { avatarRef, narrationMode } = useStreamingAvatarContext();
+
+  const getConversationalAvatar = useCallback(() => {
+    const avatar = avatarRef.current;
+
+    if (!avatar || narrationMode !== NarrationMode.CONVERSATIONAL) {
+      console.info("Text chat is disabled in webhook narration mode.");
+
+      return null;
+    }
+
+    return avatar;
+  }, [avatarRef, narrationMode]);
 
   const sendMessage = useCallback(
     (message: string) => {
-      if (!avatarRef.current) return;
-      avatarRef.current.speak({
+      const avatar = getConversationalAvatar();
+
+      if (!avatar) {
+        return;
+      }
+
+      avatar.speak({
         text: message,
         taskType: TaskType.TALK,
         taskMode: TaskMode.ASYNC,
       });
     },
-    [avatarRef],
+    [getConversationalAvatar],
   );
 
   const sendMessageSync = useCallback(
     async (message: string) => {
-      if (!avatarRef.current) return;
+      const avatar = getConversationalAvatar();
 
-      return await avatarRef.current?.speak({
+      if (!avatar) {
+        return;
+      }
+
+      return await avatar.speak({
         text: message,
         taskType: TaskType.TALK,
         taskMode: TaskMode.SYNC,
       });
     },
-    [avatarRef],
+    [getConversationalAvatar],
   );
 
   const repeatMessage = useCallback(
     (message: string) => {
-      if (!avatarRef.current) return;
+      const avatar = getConversationalAvatar();
 
-      return avatarRef.current?.speak({
+      if (!avatar) {
+        return;
+      }
+
+      return avatar.speak({
         text: message,
         taskType: TaskType.REPEAT,
         taskMode: TaskMode.ASYNC,
       });
     },
-    [avatarRef],
+    [getConversationalAvatar],
   );
 
   const repeatMessageSync = useCallback(
     async (message: string) => {
-      if (!avatarRef.current) return;
+      const avatar = getConversationalAvatar();
 
-      return await avatarRef.current?.speak({
+      if (!avatar) {
+        return;
+      }
+
+      return await avatar.speak({
         text: message,
         taskType: TaskType.REPEAT,
         taskMode: TaskMode.SYNC,
       });
     },
-    [avatarRef],
+    [getConversationalAvatar],
   );
 
   return {
