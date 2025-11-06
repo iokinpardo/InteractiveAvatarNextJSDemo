@@ -1,9 +1,11 @@
+"use client";
+
 import StreamingAvatar, {
   ConnectionQuality,
   StreamingTalkingMessageEvent,
   UserTalkingMessageEvent,
 } from "@heygen/streaming-avatar";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -14,12 +16,14 @@ export enum StreamingAvatarSessionState {
 export enum MessageSender {
   CLIENT = "CLIENT",
   AVATAR = "AVATAR",
+  WEBHOOK = "WEBHOOK",
 }
 
 export interface Message {
   id: string;
   sender: MessageSender;
   content: string;
+  botId?: string | null;
 }
 
 type StreamingAvatarContextProps = {
@@ -51,6 +55,11 @@ type StreamingAvatarContextProps = {
     detail: StreamingTalkingMessageEvent;
   }) => void;
   handleEndMessage: () => void;
+  injectWebhookMessage: (payload: {
+    id?: string;
+    message: string;
+    botId?: string | null;
+  }) => void;
 
   isListening: boolean;
   setIsListening: (isListening: boolean) => void;
@@ -81,6 +90,7 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     handleUserTalkingMessage: () => {},
     handleStreamingTalkingMessage: () => {},
     handleEndMessage: () => {},
+    injectWebhookMessage: () => {},
     isListening: false,
     setIsListening: () => {},
     isUserTalking: false,
@@ -124,72 +134,111 @@ const useStreamingAvatarVoiceChatState = () => {
 const useStreamingAvatarMessageState = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const currentSenderRef = useRef<MessageSender | null>(null);
+  const processedWebhookIdsRef = useRef(new Set<string>());
 
-  const handleUserTalkingMessage = ({
-    detail,
-  }: {
-    detail: UserTalkingMessageEvent;
-  }) => {
-    if (currentSenderRef.current === MessageSender.CLIENT) {
-      setMessages((prev) => [
-        ...prev.slice(0, -1),
-        {
-          ...prev[prev.length - 1],
-          content: [prev[prev.length - 1].content, detail.message].join(""),
-        },
-      ]);
-    } else {
-      currentSenderRef.current = MessageSender.CLIENT;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          sender: MessageSender.CLIENT,
-          content: detail.message,
-        },
-      ]);
-    }
-  };
+  const handleUserTalkingMessage = useCallback(
+    ({ detail }: { detail: UserTalkingMessageEvent }) => {
+      if (currentSenderRef.current === MessageSender.CLIENT) {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            ...prev[prev.length - 1],
+            content: [prev[prev.length - 1].content, detail.message].join(""),
+          },
+        ]);
+      } else {
+        currentSenderRef.current = MessageSender.CLIENT;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            sender: MessageSender.CLIENT,
+            content: detail.message,
+          },
+        ]);
+      }
+    },
+    [],
+  );
 
-  const handleStreamingTalkingMessage = ({
-    detail,
-  }: {
-    detail: StreamingTalkingMessageEvent;
-  }) => {
-    if (currentSenderRef.current === MessageSender.AVATAR) {
-      setMessages((prev) => [
-        ...prev.slice(0, -1),
-        {
-          ...prev[prev.length - 1],
-          content: [prev[prev.length - 1].content, detail.message].join(""),
-        },
-      ]);
-    } else {
-      currentSenderRef.current = MessageSender.AVATAR;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          sender: MessageSender.AVATAR,
-          content: detail.message,
-        },
-      ]);
-    }
-  };
+  const handleStreamingTalkingMessage = useCallback(
+    ({ detail }: { detail: StreamingTalkingMessageEvent }) => {
+      if (currentSenderRef.current === MessageSender.AVATAR) {
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            ...prev[prev.length - 1],
+            content: [prev[prev.length - 1].content, detail.message].join(""),
+          },
+        ]);
+      } else {
+        currentSenderRef.current = MessageSender.AVATAR;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            sender: MessageSender.AVATAR,
+            content: detail.message,
+          },
+        ]);
+      }
+    },
+    [],
+  );
 
-  const handleEndMessage = () => {
+  const handleEndMessage = useCallback(() => {
     currentSenderRef.current = null;
-  };
+  }, []);
+
+  const injectWebhookMessage = useCallback(
+    ({
+      id,
+      message,
+      botId,
+    }: {
+      id?: string;
+      message: string;
+      botId?: string | null;
+    }) => {
+      const trimmedMessage = message.trim();
+
+      if (!trimmedMessage) {
+        return;
+      }
+
+      const messageId = id ?? crypto.randomUUID?.() ?? Date.now().toString();
+
+      if (processedWebhookIdsRef.current.has(messageId)) {
+        return;
+      }
+
+      processedWebhookIdsRef.current.add(messageId);
+      currentSenderRef.current = null;
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: messageId,
+          sender: MessageSender.WEBHOOK,
+          content: trimmedMessage,
+          botId: botId ?? null,
+        },
+      ]);
+    },
+    [],
+  );
 
   return {
     messages,
-    clearMessages: () => {
+    clearMessages: useCallback(() => {
       setMessages([]);
       currentSenderRef.current = null;
-    },
+      processedWebhookIdsRef.current.clear();
+    }, []),
     handleUserTalkingMessage,
     handleStreamingTalkingMessage,
     handleEndMessage,
+    injectWebhookMessage,
   };
 };
 
@@ -229,10 +278,52 @@ export const StreamingAvatarProvider = ({
   const avatarRef = React.useRef<StreamingAvatar>(null);
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
-  const messageState = useStreamingAvatarMessageState();
+  const { injectWebhookMessage, ...messageState } =
+    useStreamingAvatarMessageState();
   const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const streamUrl = "/api/webhook/stream";
+    const eventSource = new EventSource(streamUrl);
+
+    const handleEvent = (event: MessageEvent<string>) => {
+      try {
+        const data = JSON.parse(event.data) as {
+          id?: string;
+          message?: string;
+          botId?: string | null;
+        };
+
+        if (typeof data.message !== "string") {
+          return;
+        }
+
+        injectWebhookMessage({
+          id: data.id,
+          message: data.message,
+          botId: data.botId ?? null,
+        });
+      } catch (error) {
+        console.error("Failed to parse webhook message", error);
+      }
+    };
+
+    eventSource.addEventListener("webhook-message", handleEvent);
+    eventSource.onerror = (error) => {
+      console.error("Webhook stream connection error", error);
+    };
+
+    return () => {
+      eventSource.removeEventListener("webhook-message", handleEvent);
+      eventSource.close();
+    };
+  }, [injectWebhookMessage]);
 
   return (
     <StreamingAvatarContext.Provider
@@ -242,6 +333,7 @@ export const StreamingAvatarProvider = ({
         ...voiceChatState,
         ...sessionState,
         ...messageState,
+        injectWebhookMessage,
         ...listeningState,
         ...talkingState,
         ...connectionQualityState,
