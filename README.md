@@ -6,15 +6,37 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 ## Highlights
 
-- **Dynamic session configuration** – The page accepts `systemPrompt` and `avatarId` (or `avatar_id`) query parameters, trims them, and forwards the values into the avatar start request so Recall-style integrations can drive both the knowledge base and the persona from the URL.
+- **URL-driven avatar overrides** – The page accepts `avatarId` (or `avatar_id`) query parameters, trims them, and forwards the value into the avatar start request so Recall-style integrations can still select the persona from the URL while ignoring knowledge-base prompts.
+- **Configurable narration modes** – Choose between conversational voice chat (system prompt + microphone streaming) or webhook-driven narration; mode selection flows through context so the UI, banners, and speech queue stay in sync.
 - **Secure token exchange** – Access tokens are fetched on demand from the `/api/get-access-token` route, which calls the HeyGen Streaming API with your `HEYGEN_API_KEY`.
-- **Voice chat automation** – The client attempts to open microphone streaming immediately after the avatar connects and surfaces a retry banner if permissions or devices fail.
 - **Session diagnostics overlay** – The video overlay reports connection quality and webhook messages while keeping the layout focused on the avatar feed.
 - **Hook-based session state** – Reusable hooks wrap the Streaming Avatar SDK to manage media streams, message assembly, connection quality, and voice chat in React context.
 - **Composable control surfaces** – Ready-made components for avatar/voice configuration, text chat, and microphone toggles can be embedded when you need operator controls.
 - **Text task helpers** – Utility hooks expose `TaskType.TALK` and `TaskType.REPEAT` flows for synchronous or asynchronous text-driven interactions.
 
 ## Features
+
+### Narration modes: Conversational chat or webhook playback
+
+- **Feature name:** Dual narration modes.
+- **Purpose / What it does:** Lets operators toggle between the classic conversational experience (system prompt + microphone streaming) and a webhook playback mode where the avatar simply narrates payloads pushed over SSE.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?narrationMode=conversational    # conversational chat with microphone capture
+  https://your-demo-host?narrationMode=webhook           # webhook-driven narration (default)
+  ```
+
+  While in webhook mode, push narration via the existing SSE webhook endpoint:
+
+  ```bash
+  curl -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"message":"Agenda item one","botId":"meeting-host"}' \
+    https://your-demo-host/api/webhook
+  ```
+
+- **Dependencies / breaking changes:** The conversational mode reinstates automatic `startVoiceChat` and knowledge-base prompts; webhook mode keeps microphone and text chat disabled, ignores system prompts, and queues each payload through `/api/webhook/stream` before dispatching a `streaming.task` call with `task_type=repeat` and synchronous delivery so the avatar repeats the text verbatim.
 
 ### Expert presets via query parameter
 
@@ -81,14 +103,15 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 2. **The client requests a streaming token** from `/api/get-access-token`, which calls `v1/streaming.create_token` using your HeyGen API key and base URL.
 3. **A `StreamingAvatar` instance is created**, listeners are attached for stream readiness, connection drops, voice activity, and message events, and the session enters the connecting state.
 4. **Message events are coalesced per speaker** and stored in context so integrators can wire custom transcripts or analytics without duplicated rows.
-5. **Voice chat starts automatically**; if it fails, the UI exposes controls that retry microphone streaming while keeping the avatar session alive.
+5. **Narration mode steers speech delivery**; in conversational mode the SDK opens microphone streaming and uses the supplied system prompt, while webhook mode queues each payload, then triggers `streaming.task` with `task_type=repeat` so the avatar reads the text synchronously with mic capture disabled.
 6. **The media stream binds to the `<video>` tag** and displays connection quality overlays so operators can monitor call health.
 
 ## URL parameters
 
 - `expert` – Chooses a preset avatar profile. Supported values: `marketing` (default) and `finance`.
-- `systemPrompt` or `system_prompt` – Sent as the session knowledge base so the avatar can follow custom instructions.
+- `systemPrompt` or `system_prompt` – Applied as a knowledge base when `narrationMode=conversational`; ignored automatically when `narrationMode=webhook`.
 - `avatarId` or `avatar_id` – Overrides the default avatar ID before `createStartAvatar` runs.
+- `narrationMode` or `narration_mode` – Switches between `conversational` (system prompt + microphone) and `webhook` (payload narration only).
 
 Public avatar IDs such as `Ann_Therapist_public`, `Shawn_Therapist_public`, `Bryan_FitnessCoach_public`, `Dexter_Doctor_Standing2_public`, and `Elenora_IT_Sitting_public` are included for quick testing, and you can substitute any custom ID you own.
 
@@ -138,10 +161,10 @@ If you plan to use the optional OpenAI-powered helpers, also define `OPENAI_API_
 ## Using the demo
 
 - When the page loads it automatically fetches a token, initializes `StreamingAvatar`, attaches SDK event listeners, and transitions to the connected state once media is ready.
-- If voice chat fails to start (permissions or device issues), a warning banner explains the issue and offers a retry button; retries only affect voice chat, not the avatar session.
+- In webhook mode a banner under the video reminds operators that voice chat is disabled; in conversational mode the component surfaces retry messaging if microphone capture cannot start automatically.
 - User and avatar utterances continue to stream through context, so custom dashboards can render transcripts even though the default UI omits them for a cleaner look.
 - The video canvas displays connection quality and webhook overlays while keeping the chrome minimal—no stop button or auxiliary controls appear by default.
-- Optional UI pieces—`AvatarControls`, `AudioInput`, and `TextInput`—let you toggle voice/text chat, mute or unmute the microphone, and send scripted prompts (async/sync talk or repeat tasks).
+- Optional UI pieces—`AvatarControls`, `AudioInput`, and `TextInput`—remain available if you want to re-enable microphone or scripted interactions in a custom fork.
 - The `useVoiceChat`, `useInterrupt`, and `useConversationState` hooks expose imperative helpers for microphone control, cutting off avatar speech, and driving listening indicators in custom UIs.
 - All session state—stream handles, voice chat flags, message history, and connection quality—lives inside `StreamingAvatarProvider`, so any component can consume it via the context hooks.
 
@@ -154,14 +177,14 @@ If you plan to use the optional OpenAI-powered helpers, also define `OPENAI_API_
 
 ## Modifying the avatar in a Recall bot configuration
 
-The Next.js entry page reads both `systemPrompt` and `avatarId` (or `avatar_id`) from the query string, trims them, and hands the values to the `InteractiveAvatar` component before it renders the session.
+The Next.js entry page still reads both `systemPrompt` and `avatarId` (or `avatar_id`) from the query string, trims them, and hands the values to the `InteractiveAvatar` component before it renders the session. When `narrationMode=webhook`, `systemPrompt` is intentionally ignored while `avatarId` continues to steer which persona boots; with `narrationMode=conversational` the trimmed prompt is forwarded to the Streaming Avatar SDK as the knowledge base.
 
-Inside `createDefaultConfig`, the selected ID is applied to the `avatarName` field (falling back to `Ann_Therapist_public` when no override is provided) and the `systemPrompt` is forwarded as the session knowledge base.
+Inside `createDefaultConfig`, the selected ID is applied to the `avatarName` field (falling back to `Ann_Therapist_public` when no override is provided) and the knowledge base is only attached when the conversational narration mode is active.
 
 To change the avatar for your Recall configuration you can update the URL to something like:
 
 ```
-https://interactiveavatarnextjsdemo-rfuq.onrender.com?systemPrompt=you%20speak%20just%20in%20poem%20format&avatarId=Shawn_Therapist_public
+https://interactiveavatarnextjsdemo-rfuq.onrender.com?avatarId=Shawn_Therapist_public
 ```
 
 Any of the bundled public IDs—such as `Shawn_Therapist_public`, `Bryan_FitnessCoach_public`, or your own custom avatar—will work; the curated list in `app/lib/constants.ts` is a quick reference when you need an ID.

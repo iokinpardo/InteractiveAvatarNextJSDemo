@@ -14,9 +14,13 @@ import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
-import { useVoiceChat } from "./logic/useVoiceChat";
-import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
+import {
+  NarrationMode,
+  StreamingAvatarProvider,
+  StreamingAvatarSessionState,
+} from "./logic";
 import { LoadingIcon } from "./Icons";
+import { useVoiceChat } from "./logic/useVoiceChat";
 
 type CreateDefaultConfigArgs = {
   systemPrompt?: string;
@@ -82,6 +86,7 @@ type InteractiveAvatarProps = {
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
+  narrationMode: NarrationMode;
 };
 
 function InteractiveAvatar({
@@ -89,6 +94,7 @@ function InteractiveAvatar({
   avatarId,
   voiceOverrides,
   expertName,
+  narrationMode,
 }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
@@ -175,12 +181,18 @@ function InteractiveAvatar({
       const sanitizedVoiceOverrides = sanitizeVoiceOverrides(voiceOverrides);
 
       const startConfig = createDefaultConfig({
-        systemPrompt: sanitizedSystemPrompt,
+        systemPrompt:
+          narrationMode === NarrationMode.CONVERSATIONAL
+            ? sanitizedSystemPrompt
+            : undefined,
         avatarId: sanitizedAvatarId,
         voiceOverrides: sanitizedVoiceOverrides,
       });
 
-      if (sanitizedSystemPrompt) {
+      if (
+        sanitizedSystemPrompt &&
+        narrationMode === NarrationMode.CONVERSATIONAL
+      ) {
         console.log(
           "Applying system prompt as knowledgeBase",
           sanitizedSystemPrompt,
@@ -197,17 +209,19 @@ function InteractiveAvatar({
 
       await startAvatar(startConfig);
 
-      try {
-        await startVoiceChat();
-        setVoiceChatWarning(null);
-      } catch (voiceChatError) {
-        const warningMessage =
-          "Voice chat could not start automatically. The avatar is running without microphone input.";
+      if (narrationMode === NarrationMode.CONVERSATIONAL) {
+        try {
+          await startVoiceChat();
+          setVoiceChatWarning(null);
+        } catch (voiceChatError) {
+          const warningMessage =
+            "Voice chat could not start automatically. The avatar is running without microphone input.";
 
-        console.warn(warningMessage, voiceChatError);
-        setVoiceChatWarning(
-          `${warningMessage} (${getErrorMessage(voiceChatError)})`,
-        );
+          console.warn(warningMessage, voiceChatError);
+          setVoiceChatWarning(
+            `${warningMessage} (${getErrorMessage(voiceChatError)})`,
+          );
+        }
       }
     } catch (error) {
       hasStarted.current = false;
@@ -228,6 +242,10 @@ function InteractiveAvatar({
   });
 
   const handleRetryVoiceChat = useMemoizedFn(async () => {
+    if (narrationMode !== NarrationMode.CONVERSATIONAL) {
+      return;
+    }
+
     if (sessionState !== StreamingAvatarSessionState.CONNECTED) {
       return;
     }
@@ -249,6 +267,14 @@ function InteractiveAvatar({
       startSession();
     }
   }, [startSession]);
+
+  useEffect(() => {
+    if (narrationMode === NarrationMode.WEBHOOK && systemPrompt?.trim()) {
+      console.info(
+        "System prompts are ignored in webhook narration mode. Webhook messages fully control narration.",
+      );
+    }
+  }, [narrationMode, systemPrompt]);
 
   useUnmount(() => {
     stopAvatar();
@@ -299,8 +325,16 @@ function InteractiveAvatar({
           </div>
         ) : null}
       </div>
-      {voiceChatWarning ? (
-        <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+      {narrationMode === NarrationMode.WEBHOOK ? (
+        <div className="mt-3 rounded-3xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm text-sky-100">
+          <p className="text-left">
+            Voice interactions are disabled. The avatar will narrate webhook
+            messages only.
+          </p>
+        </div>
+      ) : null}
+      {narrationMode === NarrationMode.CONVERSATIONAL && voiceChatWarning ? (
+        <div className="mt-3 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
           <p className="mb-3 text-left">{voiceChatWarning}</p>
           <button
             className="rounded-full border border-amber-400/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-100 transition hover:border-amber-300 hover:bg-amber-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
@@ -320,6 +354,7 @@ type InteractiveAvatarWrapperProps = {
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
+  narrationMode?: NarrationMode;
 };
 
 export default function InteractiveAvatarWrapper({
@@ -327,12 +362,17 @@ export default function InteractiveAvatarWrapper({
   avatarId,
   voiceOverrides,
   expertName,
+  narrationMode = NarrationMode.CONVERSATIONAL,
 }: InteractiveAvatarWrapperProps) {
   return (
-    <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
+    <StreamingAvatarProvider
+      basePath={process.env.NEXT_PUBLIC_BASE_API_URL}
+      narrationMode={narrationMode}
+    >
       <InteractiveAvatar
         avatarId={avatarId}
         expertName={expertName}
+        narrationMode={narrationMode}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
       />

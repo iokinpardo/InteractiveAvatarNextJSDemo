@@ -4,8 +4,12 @@ import StreamingAvatar, {
   ConnectionQuality,
   StreamingTalkingMessageEvent,
   UserTalkingMessageEvent,
+  TaskMode,
+  TaskType,
 } from "@heygen/streaming-avatar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+
+import { NarrationMode } from "./narrationMode";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -29,6 +33,7 @@ export interface Message {
 type StreamingAvatarContextProps = {
   avatarRef: React.MutableRefObject<StreamingAvatar | null>;
   basePath?: string;
+  narrationMode: NarrationMode;
 
   isMuted: boolean;
   setIsMuted: (isMuted: boolean) => void;
@@ -80,6 +85,7 @@ type StreamingAvatarContextProps = {
 const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
   {
     avatarRef: { current: null },
+    narrationMode: NarrationMode.CONVERSATIONAL,
     isMuted: true,
     setIsMuted: () => {},
     isVoiceChatLoading: false,
@@ -290,9 +296,11 @@ const useStreamingAvatarConnectionQualityState = () => {
 export const StreamingAvatarProvider = ({
   children,
   basePath,
+  narrationMode = NarrationMode.CONVERSATIONAL,
 }: {
   children: React.ReactNode;
   basePath?: string;
+  narrationMode?: NarrationMode;
 }) => {
   const avatarRef = React.useRef<StreamingAvatar>(null);
   const voiceChatState = useStreamingAvatarVoiceChatState();
@@ -302,6 +310,14 @@ export const StreamingAvatarProvider = ({
   const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
+  const currentSessionState = sessionState.sessionState;
+  const latestWebhookMessage = messageState.latestWebhookMessage;
+  const webhookSpeechQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastSpokenWebhookIdRef = useRef<string | null>(null);
+  const { setIsVoiceChatActive, setIsVoiceChatLoading, setIsMuted } =
+    voiceChatState;
+  const { setIsListening } = listeningState;
+  const { setIsUserTalking, setIsAvatarTalking } = talkingState;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -344,11 +360,100 @@ export const StreamingAvatarProvider = ({
     };
   }, [injectWebhookMessage]);
 
+  useEffect(() => {
+    if (currentSessionState === StreamingAvatarSessionState.INACTIVE) {
+      lastSpokenWebhookIdRef.current = null;
+      webhookSpeechQueueRef.current = Promise.resolve();
+    }
+  }, [currentSessionState]);
+
+  useEffect(() => {
+    if (narrationMode !== NarrationMode.WEBHOOK) {
+      lastSpokenWebhookIdRef.current = null;
+      webhookSpeechQueueRef.current = Promise.resolve();
+    }
+  }, [narrationMode]);
+
+  useEffect(() => {
+    if (narrationMode !== NarrationMode.WEBHOOK) {
+      return;
+    }
+
+    setIsVoiceChatActive(false);
+    setIsVoiceChatLoading(false);
+    setIsMuted(true);
+    setIsListening(false);
+    setIsUserTalking(false);
+    setIsAvatarTalking(false);
+
+    const tearDownRealtimePipelines = async () => {
+      try {
+        await avatarRef.current?.closeVoiceChat();
+      } catch (error) {
+        console.warn("Failed to close voice chat in webhook mode", error);
+      }
+
+      try {
+        await avatarRef.current?.stopListening();
+      } catch (error) {
+        console.warn("Failed to stop listening in webhook mode", error);
+      }
+    };
+
+    void tearDownRealtimePipelines();
+  }, [
+    narrationMode,
+    setIsAvatarTalking,
+    setIsListening,
+    setIsMuted,
+    setIsUserTalking,
+    setIsVoiceChatActive,
+    setIsVoiceChatLoading,
+    avatarRef,
+  ]);
+
+  useEffect(() => {
+    if (
+      narrationMode !== NarrationMode.WEBHOOK ||
+      currentSessionState !== StreamingAvatarSessionState.CONNECTED ||
+      !latestWebhookMessage ||
+      !latestWebhookMessage.message.trim() ||
+      !avatarRef.current
+    ) {
+      return;
+    }
+
+    if (lastSpokenWebhookIdRef.current === latestWebhookMessage.id) {
+      return;
+    }
+
+    lastSpokenWebhookIdRef.current = latestWebhookMessage.id;
+
+    const speakWebhookMessage = async () => {
+      try {
+        await avatarRef.current?.speak({
+          text: latestWebhookMessage.message,
+          // `repeat` mode bypasses the knowledge base and reads the payload verbatim.
+          taskType: TaskType.REPEAT,
+          task_type: TaskType.REPEAT,
+          taskMode: TaskMode.SYNC,
+        });
+      } catch (error) {
+        console.error("Failed to speak webhook message", error);
+      }
+    };
+
+    webhookSpeechQueueRef.current = webhookSpeechQueueRef.current
+      .catch(() => undefined)
+      .then(speakWebhookMessage);
+  }, [avatarRef, currentSessionState, latestWebhookMessage, narrationMode]);
+
   return (
     <StreamingAvatarContext.Provider
       value={{
         avatarRef,
         basePath,
+        narrationMode,
         ...voiceChatState,
         ...sessionState,
         ...messageState,
