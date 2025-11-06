@@ -3,12 +3,13 @@ import { ConnectionQuality } from "@heygen/streaming-avatar";
 
 import { useConnectionQuality } from "../logic/useConnectionQuality";
 import { useStreamingAvatarSession } from "../logic/useStreamingAvatarSession";
+import { StreamingAvatarSessionState } from "../logic";
 import { StreamingAvatarSessionState, useWebhookMessage } from "../logic";
 import { CloseIcon } from "../Icons";
 import { Button } from "../Button";
 
 export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
-  const { sessionState, stopAvatar } = useStreamingAvatarSession();
+  const { sessionState } = useStreamingAvatarSession();
   const { connectionQuality } = useConnectionQuality();
   const { latestWebhookMessage } = useWebhookMessage();
 
