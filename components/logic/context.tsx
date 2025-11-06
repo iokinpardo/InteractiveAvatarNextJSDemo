@@ -4,6 +4,8 @@ import StreamingAvatar, {
   ConnectionQuality,
   StreamingTalkingMessageEvent,
   UserTalkingMessageEvent,
+  TaskMode,
+  TaskType,
 } from "@heygen/streaming-avatar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
@@ -302,6 +304,10 @@ export const StreamingAvatarProvider = ({
   const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
+  const currentSessionState = sessionState.sessionState;
+  const latestWebhookMessage = messageState.latestWebhookMessage;
+  const webhookSpeechQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastSpokenWebhookIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -343,6 +349,46 @@ export const StreamingAvatarProvider = ({
       eventSource.close();
     };
   }, [injectWebhookMessage]);
+
+  useEffect(() => {
+    if (currentSessionState === StreamingAvatarSessionState.INACTIVE) {
+      lastSpokenWebhookIdRef.current = null;
+      webhookSpeechQueueRef.current = Promise.resolve();
+    }
+  }, [currentSessionState]);
+
+  useEffect(() => {
+    if (
+      currentSessionState !== StreamingAvatarSessionState.CONNECTED ||
+      !latestWebhookMessage ||
+      !latestWebhookMessage.message.trim() ||
+      !avatarRef.current
+    ) {
+      return;
+    }
+
+    if (lastSpokenWebhookIdRef.current === latestWebhookMessage.id) {
+      return;
+    }
+
+    lastSpokenWebhookIdRef.current = latestWebhookMessage.id;
+
+    const speakWebhookMessage = async () => {
+      try {
+        await avatarRef.current?.speak({
+          text: latestWebhookMessage.message,
+          taskType: TaskType.TALK,
+          taskMode: TaskMode.ASYNC,
+        });
+      } catch (error) {
+        console.error("Failed to speak webhook message", error);
+      }
+    };
+
+    webhookSpeechQueueRef.current = webhookSpeechQueueRef.current
+      .catch(() => undefined)
+      .then(speakWebhookMessage);
+  }, [avatarRef, currentSessionState, latestWebhookMessage]);
 
   return (
     <StreamingAvatarContext.Provider
