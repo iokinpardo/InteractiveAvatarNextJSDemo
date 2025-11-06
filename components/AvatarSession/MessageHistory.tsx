@@ -19,40 +19,21 @@ export const MessageHistory: React.FC = () => {
       ref={containerRef}
       className="flex max-h-60 w-full flex-col gap-2 self-stretch overflow-y-auto px-2 py-2 text-white"
     >
-      {messages.map((message) => {
-        const isClient = message.sender === MessageSender.CLIENT;
-        const senderLabel = (() => {
-          if (message.sender === MessageSender.AVATAR) {
-            return "Avatar";
-          }
-
-          if (message.sender === MessageSender.WEBHOOK) {
-            return message.botId ? `Webhook (${message.botId})` : "Webhook";
-          }
-
-          return "You";
-        })();
-
-        return (
-          <div
-            key={message.id}
-            className={`flex max-w-[350px] flex-col gap-1 ${
-              isClient ? "self-end items-end" : "self-start items-start"
-            }`}
-          >
-            <p
-              className={`text-xs ${
-                message.sender === MessageSender.WEBHOOK
-                  ? "text-sky-300"
-                  : "text-zinc-400"
-              }`}
-            >
-              {senderLabel}
-            </p>
-            <p className="text-sm">{message.content}</p>
-          </div>
-        );
-      })}
+      {messages.map((message) => (
+        <div
+          key={message.id}
+          className={`flex flex-col gap-1 max-w-[350px] ${
+            message.sender === MessageSender.CLIENT
+              ? "self-end items-end"
+              : "self-start items-start"
+          }`}
+        >
+          <p className="text-xs text-zinc-400">
+            {message.sender === MessageSender.AVATAR ? "Avatar" : "You"}
+          </p>
+          <p className="text-sm">{message.content}</p>
+        </div>
+      ))}
     </div>
   );
 };
