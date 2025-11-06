@@ -60,6 +60,21 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Usage example:** Click the **Stop** button in the top-right corner of the video canvas to terminate the active expert.
 - **Dependencies / breaking changes:** No breaking changes; the control simply invokes the existing `stopAvatar` hook.
 
+### Webhook overlay messages
+
+- **Feature name:** Webhook overlay messages beside the video feed.
+- **Purpose / What it does:** Listens to `/api/webhook/stream` via Server-Sent Events (SSE) inside the `StreamingAvatarProvider`, tracks the most recent payload, and surfaces it in the video overlay so operators see the latest `message` and `botId` without expanding the transcript.
+- **Usage example:**
+
+  ```bash
+  curl -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"message":"Webhook hello!","botId":"support-bot"}' \
+    https://your-demo-host/api/webhook
+  ```
+
+- **Dependencies / breaking changes:** Requires the demo to be running so the SSE subscription at `/api/webhook/stream` stays open; webhook payloads are no longer appended to the transcript.
+
 ## How it works
 
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
