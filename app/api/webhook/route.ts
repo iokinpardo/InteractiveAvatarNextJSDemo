@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server";
+
 import { addWebhookMessage } from "./eventHub";
 
 export const runtime = "nodejs";
@@ -11,11 +13,14 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Failed to parse webhook payload", error);
 
-    return Response.json({ error: "Invalid JSON payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid JSON payload" },
+      { status: 400 },
+    );
   }
 
   if (!payload || typeof payload !== "object") {
-    return Response.json(
+    return NextResponse.json(
       { error: "Payload must be an object" },
       { status: 400 },
     );
@@ -27,14 +32,14 @@ export async function POST(request: Request) {
   };
 
   if (typeof message !== "string" || message.trim().length === 0) {
-    return Response.json(
+    return NextResponse.json(
       { error: "`message` is required and must be a non-empty string" },
       { status: 400 },
     );
   }
 
   if (botId != null && typeof botId !== "string") {
-    return Response.json(
+    return NextResponse.json(
       { error: "`botId` must be a string when provided" },
       { status: 400 },
     );
@@ -49,5 +54,5 @@ export async function POST(request: Request) {
 
   addWebhookMessage(webhookMessage);
 
-  return Response.json({ ok: true });
+  return NextResponse.json({ ok: true });
 }
