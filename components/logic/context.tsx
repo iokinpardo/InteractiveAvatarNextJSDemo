@@ -43,6 +43,11 @@ type StreamingAvatarContextProps = {
   setStream: (stream: MediaStream | null) => void;
 
   messages: Message[];
+  latestWebhookMessage: {
+    id: string;
+    message: string;
+    botId: string | null;
+  } | null;
   clearMessages: () => void;
   handleUserTalkingMessage: ({
     detail,
@@ -86,6 +91,7 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     stream: null,
     setStream: () => {},
     messages: [],
+    latestWebhookMessage: null,
     clearMessages: () => {},
     handleUserTalkingMessage: () => {},
     handleStreamingTalkingMessage: () => {},
@@ -133,6 +139,11 @@ const useStreamingAvatarVoiceChatState = () => {
 
 const useStreamingAvatarMessageState = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [latestWebhookMessage, setLatestWebhookMessage] = useState<{
+    id: string;
+    message: string;
+    botId: string | null;
+  } | null>(null);
   const currentSenderRef = useRef<MessageSender | null>(null);
   const processedWebhookIdsRef = useRef(new Set<string>());
 
@@ -224,16 +235,24 @@ const useStreamingAvatarMessageState = () => {
           botId: botId ?? null,
         },
       ]);
+
+      setLatestWebhookMessage({
+        id: messageId,
+        message: trimmedMessage,
+        botId: botId ?? null,
+      });
     },
     [],
   );
 
   return {
     messages,
+    latestWebhookMessage,
     clearMessages: useCallback(() => {
       setMessages([]);
       currentSenderRef.current = null;
       processedWebhookIdsRef.current.clear();
+      setLatestWebhookMessage(null);
     }, []),
     handleUserTalkingMessage,
     handleStreamingTalkingMessage,
