@@ -391,7 +391,8 @@ export const StreamingAvatarProvider = ({
       try {
         await avatarRef.current?.speak({
           text: latestWebhookMessage.message,
-          taskType: TaskType.TALK,
+          // `repeat` mode bypasses the knowledge base and reads the payload verbatim.
+          taskType: TaskType.REPEAT,
           taskMode: TaskMode.ASYNC,
         });
       } catch (error) {

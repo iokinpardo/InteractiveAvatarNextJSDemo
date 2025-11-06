@@ -36,7 +36,7 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
     https://your-demo-host/api/webhook
   ```
 
-- **Dependencies / breaking changes:** The LLM mode reinstates automatic `startVoiceChat` and knowledge-base prompts; webhook mode keeps microphone capture disabled and ignores system prompts while still queueing speech through `/api/webhook/stream`.
+- **Dependencies / breaking changes:** The LLM mode reinstates automatic `startVoiceChat` and knowledge-base prompts; webhook mode keeps microphone capture disabled, ignores system prompts, and queues each payload through `/api/webhook/stream` before dispatching a `streaming.task` call with `task_type=repeat` so the avatar repeats the text verbatim.
 
 ### Expert presets via query parameter
 
@@ -103,7 +103,7 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 2. **The client requests a streaming token** from `/api/get-access-token`, which calls `v1/streaming.create_token` using your HeyGen API key and base URL.
 3. **A `StreamingAvatar` instance is created**, listeners are attached for stream readiness, connection drops, voice activity, and message events, and the session enters the connecting state.
 4. **Message events are coalesced per speaker** and stored in context so integrators can wire custom transcripts or analytics without duplicated rows.
-5. **Narration mode steers speech delivery**; in LLM mode the SDK opens microphone streaming and uses the supplied system prompt, while webhook mode queues each payload and speaks it asynchronously with mic capture disabled.
+5. **Narration mode steers speech delivery**; in LLM mode the SDK opens microphone streaming and uses the supplied system prompt, while webhook mode queues each payload, then triggers `streaming.task` with `task_type=repeat` so the avatar reads the text asynchronously with mic capture disabled.
 6. **The media stream binds to the `<video>` tag** and displays connection quality overlays so operators can monitor call health.
 
 ## URL parameters
