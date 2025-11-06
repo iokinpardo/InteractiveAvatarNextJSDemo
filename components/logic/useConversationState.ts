@@ -1,30 +1,20 @@
 import { useCallback } from "react";
 
 import { useStreamingAvatarContext } from "./context";
-import { NarrationMode } from "./narrationMode";
 
 export const useConversationState = () => {
-  const {
-    avatarRef,
-    isAvatarTalking,
-    isUserTalking,
-    isListening,
-    narrationMode,
-  } = useStreamingAvatarContext();
+  const { avatarRef, isAvatarTalking, isUserTalking, isListening } =
+    useStreamingAvatarContext();
 
   const startListening = useCallback(() => {
-    if (!avatarRef.current || narrationMode !== NarrationMode.CONVERSATIONAL) {
-      return;
-    }
+    if (!avatarRef.current) return;
     avatarRef.current.startListening();
-  }, [avatarRef, narrationMode]);
+  }, [avatarRef]);
 
   const stopListening = useCallback(() => {
-    if (!avatarRef.current || narrationMode !== NarrationMode.CONVERSATIONAL) {
-      return;
-    }
+    if (!avatarRef.current) return;
     avatarRef.current.stopListening();
-  }, [avatarRef, narrationMode]);
+  }, [avatarRef]);
 
   return {
     isAvatarListening: isListening,

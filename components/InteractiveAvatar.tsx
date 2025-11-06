@@ -13,14 +13,11 @@ import { useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
+import { MessageHistory } from "./AvatarSession/MessageHistory";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
-import {
-  NarrationMode,
-  StreamingAvatarProvider,
-  StreamingAvatarSessionState,
-} from "./logic";
-import { LoadingIcon } from "./Icons";
 import { useVoiceChat } from "./logic/useVoiceChat";
+import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
+import { LoadingIcon } from "./Icons";
 
 type CreateDefaultConfigArgs = {
   systemPrompt?: string;
@@ -86,7 +83,6 @@ type InteractiveAvatarProps = {
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
-  narrationMode: NarrationMode;
 };
 
 function InteractiveAvatar({
@@ -94,7 +90,6 @@ function InteractiveAvatar({
   avatarId,
   voiceOverrides,
   expertName,
-  narrationMode,
 }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
@@ -181,18 +176,12 @@ function InteractiveAvatar({
       const sanitizedVoiceOverrides = sanitizeVoiceOverrides(voiceOverrides);
 
       const startConfig = createDefaultConfig({
-        systemPrompt:
-          narrationMode === NarrationMode.CONVERSATIONAL
-            ? sanitizedSystemPrompt
-            : undefined,
+        systemPrompt: sanitizedSystemPrompt,
         avatarId: sanitizedAvatarId,
         voiceOverrides: sanitizedVoiceOverrides,
       });
 
-      if (
-        sanitizedSystemPrompt &&
-        narrationMode === NarrationMode.CONVERSATIONAL
-      ) {
+      if (sanitizedSystemPrompt) {
         console.log(
           "Applying system prompt as knowledgeBase",
           sanitizedSystemPrompt,
@@ -209,19 +198,17 @@ function InteractiveAvatar({
 
       await startAvatar(startConfig);
 
-      if (narrationMode === NarrationMode.CONVERSATIONAL) {
-        try {
-          await startVoiceChat();
-          setVoiceChatWarning(null);
-        } catch (voiceChatError) {
-          const warningMessage =
-            "Voice chat could not start automatically. The avatar is running without microphone input.";
+      try {
+        await startVoiceChat();
+        setVoiceChatWarning(null);
+      } catch (voiceChatError) {
+        const warningMessage =
+          "Voice chat could not start automatically. The avatar is running without microphone input.";
 
-          console.warn(warningMessage, voiceChatError);
-          setVoiceChatWarning(
-            `${warningMessage} (${getErrorMessage(voiceChatError)})`,
-          );
-        }
+        console.warn(warningMessage, voiceChatError);
+        setVoiceChatWarning(
+          `${warningMessage} (${getErrorMessage(voiceChatError)})`,
+        );
       }
     } catch (error) {
       hasStarted.current = false;
@@ -242,10 +229,6 @@ function InteractiveAvatar({
   });
 
   const handleRetryVoiceChat = useMemoizedFn(async () => {
-    if (narrationMode !== NarrationMode.CONVERSATIONAL) {
-      return;
-    }
-
     if (sessionState !== StreamingAvatarSessionState.CONNECTED) {
       return;
     }
@@ -268,14 +251,6 @@ function InteractiveAvatar({
     }
   }, [startSession]);
 
-  useEffect(() => {
-    if (narrationMode === NarrationMode.WEBHOOK && systemPrompt?.trim()) {
-      console.info(
-        "System prompts are ignored in webhook narration mode. Webhook messages fully control narration.",
-      );
-    }
-  }, [narrationMode, systemPrompt]);
-
   useUnmount(() => {
     stopAvatar();
   });
@@ -290,7 +265,7 @@ function InteractiveAvatar({
   }, [mediaStream, stream]);
 
   return (
-    <div className="w-full">
+    <div className="w-full max-w-[900px]">
       <div className="relative w-full aspect-video overflow-hidden rounded-3xl bg-zinc-900">
         <AvatarVideo ref={mediaStream} />
         {sessionState !== StreamingAvatarSessionState.CONNECTED ? (
@@ -325,16 +300,8 @@ function InteractiveAvatar({
           </div>
         ) : null}
       </div>
-      {narrationMode === NarrationMode.WEBHOOK ? (
-        <div className="mt-3 rounded-3xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm text-sky-100">
-          <p className="text-left">
-            Voice interactions are disabled. The avatar will narrate webhook
-            messages only.
-          </p>
-        </div>
-      ) : null}
-      {narrationMode === NarrationMode.CONVERSATIONAL && voiceChatWarning ? (
-        <div className="mt-3 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+      {voiceChatWarning ? (
+        <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
           <p className="mb-3 text-left">{voiceChatWarning}</p>
           <button
             className="rounded-full border border-amber-400/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-100 transition hover:border-amber-300 hover:bg-amber-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
@@ -345,6 +312,12 @@ function InteractiveAvatar({
           </button>
         </div>
       ) : null}
+      <div className="rounded-3xl bg-zinc-900/70 p-4">
+        <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-zinc-400">
+          Conversation Transcript
+        </h2>
+        <MessageHistory />
+      </div>
     </div>
   );
 }
@@ -354,7 +327,6 @@ type InteractiveAvatarWrapperProps = {
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
-  narrationMode?: NarrationMode;
 };
 
 export default function InteractiveAvatarWrapper({
@@ -362,17 +334,12 @@ export default function InteractiveAvatarWrapper({
   avatarId,
   voiceOverrides,
   expertName,
-  narrationMode = NarrationMode.CONVERSATIONAL,
 }: InteractiveAvatarWrapperProps) {
   return (
-    <StreamingAvatarProvider
-      basePath={process.env.NEXT_PUBLIC_BASE_API_URL}
-      narrationMode={narrationMode}
-    >
+    <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
       <InteractiveAvatar
         avatarId={avatarId}
         expertName={expertName}
-        narrationMode={narrationMode}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
       />
