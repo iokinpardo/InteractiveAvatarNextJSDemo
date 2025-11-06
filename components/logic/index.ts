@@ -9,3 +9,4 @@ export {
   StreamingAvatarProvider,
   MessageSender,
 } from "./context";
+export { NarrationMode } from "./narrationMode";

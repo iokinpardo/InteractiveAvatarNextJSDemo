@@ -9,6 +9,8 @@ import StreamingAvatar, {
 } from "@heygen/streaming-avatar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
+import { NarrationMode } from "./narrationMode";
+
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
   CONNECTING = "connecting",
@@ -31,6 +33,7 @@ export interface Message {
 type StreamingAvatarContextProps = {
   avatarRef: React.MutableRefObject<StreamingAvatar | null>;
   basePath?: string;
+  narrationMode: NarrationMode;
 
   isMuted: boolean;
   setIsMuted: (isMuted: boolean) => void;
@@ -82,6 +85,7 @@ type StreamingAvatarContextProps = {
 const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
   {
     avatarRef: { current: null },
+    narrationMode: NarrationMode.LLM,
     isMuted: true,
     setIsMuted: () => {},
     isVoiceChatLoading: false,
@@ -292,9 +296,11 @@ const useStreamingAvatarConnectionQualityState = () => {
 export const StreamingAvatarProvider = ({
   children,
   basePath,
+  narrationMode = NarrationMode.LLM,
 }: {
   children: React.ReactNode;
   basePath?: string;
+  narrationMode?: NarrationMode;
 }) => {
   const avatarRef = React.useRef<StreamingAvatar>(null);
   const voiceChatState = useStreamingAvatarVoiceChatState();
@@ -358,7 +364,15 @@ export const StreamingAvatarProvider = ({
   }, [currentSessionState]);
 
   useEffect(() => {
+    if (narrationMode !== NarrationMode.WEBHOOK) {
+      lastSpokenWebhookIdRef.current = null;
+      webhookSpeechQueueRef.current = Promise.resolve();
+    }
+  }, [narrationMode]);
+
+  useEffect(() => {
     if (
+      narrationMode !== NarrationMode.WEBHOOK ||
       currentSessionState !== StreamingAvatarSessionState.CONNECTED ||
       !latestWebhookMessage ||
       !latestWebhookMessage.message.trim() ||
@@ -388,13 +402,14 @@ export const StreamingAvatarProvider = ({
     webhookSpeechQueueRef.current = webhookSpeechQueueRef.current
       .catch(() => undefined)
       .then(speakWebhookMessage);
-  }, [avatarRef, currentSessionState, latestWebhookMessage]);
+  }, [avatarRef, currentSessionState, latestWebhookMessage, narrationMode]);
 
   return (
     <StreamingAvatarContext.Provider
       value={{
         avatarRef,
         basePath,
+        narrationMode,
         ...voiceChatState,
         ...sessionState,
         ...messageState,

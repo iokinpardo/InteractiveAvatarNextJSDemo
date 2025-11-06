@@ -14,10 +14,16 @@ import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
-import { StreamingAvatarProvider, StreamingAvatarSessionState } from "./logic";
+import {
+  NarrationMode,
+  StreamingAvatarProvider,
+  StreamingAvatarSessionState,
+} from "./logic";
 import { LoadingIcon } from "./Icons";
+import { useVoiceChat } from "./logic/useVoiceChat";
 
 type CreateDefaultConfigArgs = {
+  systemPrompt?: string;
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
 };
@@ -54,12 +60,14 @@ const sanitizeVoiceOverrides = (
 };
 
 const createDefaultConfig = ({
+  systemPrompt,
   avatarId,
   voiceOverrides,
 }: CreateDefaultConfigArgs): StartAvatarRequest => ({
   quality: AvatarQuality.Low,
   avatarName: avatarId ?? "Ann_Therapist_public",
   knowledgeId: undefined,
+  ...(systemPrompt ? { knowledgeBase: systemPrompt } : {}),
   voice: {
     rate: 1.5,
     emotion: voiceOverrides?.emotion ?? VoiceEmotion.EXCITED,
@@ -78,6 +86,7 @@ type InteractiveAvatarProps = {
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
+  narrationMode: NarrationMode;
 };
 
 function InteractiveAvatar({
@@ -85,13 +94,16 @@ function InteractiveAvatar({
   avatarId,
   voiceOverrides,
   expertName,
+  narrationMode,
 }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
+  const { startVoiceChat } = useVoiceChat();
 
   const mediaStream = useRef<HTMLVideoElement>(null);
   const hasStarted = useRef(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [voiceChatWarning, setVoiceChatWarning] = useState<string | null>(null);
 
   const getErrorMessage = (error: unknown) => {
     if (error instanceof Error && error.message) {
@@ -122,6 +134,7 @@ function InteractiveAvatar({
   const startSession = useMemoizedFn(async () => {
     try {
       setSessionError(null);
+      setVoiceChatWarning(null);
 
       const tokenPromise = fetchAccessToken();
 
@@ -163,13 +176,25 @@ function InteractiveAvatar({
         console.log(">>>>> Avatar end message:", event);
       });
 
+      const sanitizedSystemPrompt = systemPrompt?.trim() || undefined;
       const sanitizedAvatarId = avatarId?.trim() || undefined;
       const sanitizedVoiceOverrides = sanitizeVoiceOverrides(voiceOverrides);
 
       const startConfig = createDefaultConfig({
+        systemPrompt:
+          narrationMode === NarrationMode.LLM
+            ? sanitizedSystemPrompt
+            : undefined,
         avatarId: sanitizedAvatarId,
         voiceOverrides: sanitizedVoiceOverrides,
       });
+
+      if (sanitizedSystemPrompt && narrationMode === NarrationMode.LLM) {
+        console.log(
+          "Applying system prompt as knowledgeBase",
+          sanitizedSystemPrompt,
+        );
+      }
 
       if (sanitizedAvatarId) {
         console.log("Using avatar override", sanitizedAvatarId);
@@ -180,6 +205,21 @@ function InteractiveAvatar({
       }
 
       await startAvatar(startConfig);
+
+      if (narrationMode === NarrationMode.LLM) {
+        try {
+          await startVoiceChat();
+          setVoiceChatWarning(null);
+        } catch (voiceChatError) {
+          const warningMessage =
+            "Voice chat could not start automatically. The avatar is running without microphone input.";
+
+          console.warn(warningMessage, voiceChatError);
+          setVoiceChatWarning(
+            `${warningMessage} (${getErrorMessage(voiceChatError)})`,
+          );
+        }
+      }
     } catch (error) {
       hasStarted.current = false;
       const message = getErrorMessage(error);
@@ -198,6 +238,26 @@ function InteractiveAvatar({
     startSession();
   });
 
+  const handleRetryVoiceChat = useMemoizedFn(async () => {
+    if (narrationMode !== NarrationMode.LLM) {
+      return;
+    }
+
+    if (sessionState !== StreamingAvatarSessionState.CONNECTED) {
+      return;
+    }
+
+    try {
+      await startVoiceChat();
+      setVoiceChatWarning(null);
+    } catch (error) {
+      const retryMessage = "Voice chat is still unavailable.";
+
+      console.warn(retryMessage, error);
+      setVoiceChatWarning(`${retryMessage} (${getErrorMessage(error)})`);
+    }
+  });
+
   useEffect(() => {
     if (!hasStarted.current) {
       hasStarted.current = true;
@@ -206,12 +266,12 @@ function InteractiveAvatar({
   }, [startSession]);
 
   useEffect(() => {
-    if (systemPrompt?.trim()) {
+    if (narrationMode === NarrationMode.WEBHOOK && systemPrompt?.trim()) {
       console.info(
-        "System prompts are ignored. Webhook messages fully control narration.",
+        "System prompts are ignored in webhook narration mode. Webhook messages fully control narration.",
       );
     }
-  }, [systemPrompt]);
+  }, [narrationMode, systemPrompt]);
 
   useUnmount(() => {
     stopAvatar();
@@ -262,12 +322,26 @@ function InteractiveAvatar({
           </div>
         ) : null}
       </div>
-      <div className="mt-3 rounded-3xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm text-sky-100">
-        <p className="text-left">
-          Voice interactions are disabled. The avatar will narrate webhook
-          messages only.
-        </p>
-      </div>
+      {narrationMode === NarrationMode.WEBHOOK ? (
+        <div className="mt-3 rounded-3xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm text-sky-100">
+          <p className="text-left">
+            Voice interactions are disabled. The avatar will narrate webhook
+            messages only.
+          </p>
+        </div>
+      ) : null}
+      {narrationMode === NarrationMode.LLM && voiceChatWarning ? (
+        <div className="mt-3 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <p className="mb-3 text-left">{voiceChatWarning}</p>
+          <button
+            className="rounded-full border border-amber-400/40 bg-transparent px-3 py-1 text-xs font-medium text-amber-100 transition hover:border-amber-300 hover:bg-amber-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200"
+            type="button"
+            onClick={handleRetryVoiceChat}
+          >
+            Retry voice chat
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -277,6 +351,7 @@ type InteractiveAvatarWrapperProps = {
   avatarId?: string;
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
+  narrationMode?: NarrationMode;
 };
 
 export default function InteractiveAvatarWrapper({
@@ -284,12 +359,17 @@ export default function InteractiveAvatarWrapper({
   avatarId,
   voiceOverrides,
   expertName,
+  narrationMode = NarrationMode.LLM,
 }: InteractiveAvatarWrapperProps) {
   return (
-    <StreamingAvatarProvider basePath={process.env.NEXT_PUBLIC_BASE_API_URL}>
+    <StreamingAvatarProvider
+      basePath={process.env.NEXT_PUBLIC_BASE_API_URL}
+      narrationMode={narrationMode}
+    >
       <InteractiveAvatar
         avatarId={avatarId}
         expertName={expertName}
+        narrationMode={narrationMode}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
       />

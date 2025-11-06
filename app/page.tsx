@@ -3,6 +3,7 @@ import { ElevenLabsModel, VoiceEmotion } from "@heygen/streaming-avatar";
 import InteractiveAvatar, {
   type VoiceOverrides,
 } from "@/components/InteractiveAvatar";
+import { NarrationMode } from "@/components/logic/narrationMode";
 import { AVATAR_PRESETS, resolveExpert } from "@/app/lib/avatarPresets";
 
 type PageSearchParams = Record<string, string | string[] | undefined>;
@@ -88,12 +89,19 @@ export default async function App({ searchParams }: PageProps) {
     : expertPreset.voiceOverrides
       ? { ...expertPreset.voiceOverrides }
       : undefined;
+  const rawNarrationMode =
+    extractParam(resolvedSearchParams.narrationMode) ??
+    extractParam(resolvedSearchParams.narration_mode);
+  const narrationMode =
+    matchEnumParam(rawNarrationMode, Object.values(NarrationMode)) ??
+    NarrationMode.LLM;
 
   return (
     <div className="mx-auto flex w-full max-w-[900px] justify-center px-4 py-6">
       <InteractiveAvatar
         avatarId={avatarId}
         expertName={selectedExpert}
+        narrationMode={narrationMode}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
       />
