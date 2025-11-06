@@ -1,6 +1,6 @@
 # HeyGen Interactive Avatar Next.js Demo
 
-This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access tokens through a serverless route, and renders the video feed alongside conversation transcripts, voice-chat status, and diagnostics for easy experimentation.
+This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access tokens through a serverless route, and renders the video feed alongside voice-chat status and diagnostics for easy experimentation.
 
 ![HeyGen Interactive Avatar NextJS Demo Screenshot](./public/demo.png)
 
@@ -9,7 +9,7 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Dynamic session configuration** – The page accepts `systemPrompt` and `avatarId` (or `avatar_id`) query parameters, trims them, and forwards the values into the avatar start request so Recall-style integrations can drive both the knowledge base and the persona from the URL.
 - **Secure token exchange** – Access tokens are fetched on demand from the `/api/get-access-token` route, which calls the HeyGen Streaming API with your `HEYGEN_API_KEY`.
 - **Voice chat automation** – The client attempts to open microphone streaming immediately after the avatar connects and surfaces a retry banner if permissions or devices fail.
-- **Conversation transcript & diagnostics** – User/agent messages accumulate in a scrollable transcript while the video overlay reports connection quality and exposes a stop button.
+- **Session diagnostics overlay** – The video overlay reports connection quality and webhook messages while keeping the layout focused on the avatar feed.
 - **Hook-based session state** – Reusable hooks wrap the Streaming Avatar SDK to manage media streams, message assembly, connection quality, and voice chat in React context.
 - **Composable control surfaces** – Ready-made components for avatar/voice configuration, text chat, and microphone toggles can be embedded when you need operator controls.
 - **Text task helpers** – Utility hooks expose `TaskType.TALK` and `TaskType.REPEAT` flows for synchronous or asynchronous text-driven interactions.
@@ -53,12 +53,12 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 - **Dependencies / breaking changes:** No breaking changes; the fallback “Connecting to the avatar…” message still appears when no expert preset is active.
 
-### Prominent stop session control
+### Streamlined session layout
 
-- **Feature name:** Prominent stop session control.
-- **Purpose / What it does:** Highlights the stop control with a labeled red button so operators can immediately end the streaming session, including during connection handoffs.
-- **Usage example:** Click the **Stop** button in the top-right corner of the video canvas to terminate the active expert.
-- **Dependencies / breaking changes:** No breaking changes; the control simply invokes the existing `stopAvatar` hook.
+- **Feature name:** Streamlined session layout.
+- **Purpose / What it does:** Removes the side documentation panel, transcript footer, and stop button so the default experience centers the avatar feed and important status banners without auxiliary controls.
+- **Usage example:** Load the home page and interact with the avatar; only the video canvas and warning banners are shown by default.
+- **Dependencies / breaking changes:** Operators who need manual stop or transcript controls can wire custom UI by consuming the existing context hooks (`useStreamingAvatarSession`, `useMessageHistory`).
 
 ### Webhook overlay messages
 
@@ -80,9 +80,9 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
 2. **The client requests a streaming token** from `/api/get-access-token`, which calls `v1/streaming.create_token` using your HeyGen API key and base URL.
 3. **A `StreamingAvatar` instance is created**, listeners are attached for stream readiness, connection drops, voice activity, and message events, and the session enters the connecting state.
-4. **Message events are coalesced per speaker** and stored in context, giving the transcript component a steady stream of updates without duplicated rows.
+4. **Message events are coalesced per speaker** and stored in context so integrators can wire custom transcripts or analytics without duplicated rows.
 5. **Voice chat starts automatically**; if it fails, the UI exposes controls that retry microphone streaming while keeping the avatar session alive.
-6. **The media stream binds to the `<video>` tag** and displays connection quality plus a stop control for graceful shutdown.
+6. **The media stream binds to the `<video>` tag** and displays connection quality overlays so operators can monitor call health.
 
 ## URL parameters
 
@@ -96,7 +96,7 @@ Public avatar IDs such as `Ann_Therapist_public`, `Shawn_Therapist_public`, `Bry
 
 - `app/` – Route handlers (`page.tsx`), the streaming token API route, and global layout/font configuration.
 - `components/InteractiveAvatar.tsx` – Entry component that wraps the provider, fetches tokens, initializes the avatar, and renders the primary UI shell.
-- `components/AvatarSession/` – Video player, transcript, microphone toggle, text input, and control toggle components for composing the in-session experience.
+- `components/AvatarSession/` – Video player, optional message history, microphone toggle, text input, and control toggle components for composing the in-session experience.
 - `components/logic/` – Context provider and React hooks that expose session lifecycle, voice chat, message history, conversation state, interrupts, and text tasks.
 - `components/AvatarConfig/` – Optional configuration panel components (fields, selects, avatar pickers, voice/STT toggles) ready to drop into an admin surface.
 - `app/lib/constants.ts` – Shared avatar catalog and STT language options used by the configuration UI.
@@ -139,8 +139,8 @@ If you plan to use the optional OpenAI-powered helpers, also define `OPENAI_API_
 
 - When the page loads it automatically fetches a token, initializes `StreamingAvatar`, attaches SDK event listeners, and transitions to the connected state once media is ready.
 - If voice chat fails to start (permissions or device issues), a warning banner explains the issue and offers a retry button; retries only affect voice chat, not the avatar session.
-- User and avatar utterances stream into the transcript view, which groups consecutive text from the same speaker for readability and autoscrolls to the latest message.
-- The video canvas displays connection quality and exposes a close button that stops the avatar gracefully by calling `stopAvatar`.
+- User and avatar utterances continue to stream through context, so custom dashboards can render transcripts even though the default UI omits them for a cleaner look.
+- The video canvas displays connection quality and webhook overlays while keeping the chrome minimal—no stop button or auxiliary controls appear by default.
 - Optional UI pieces—`AvatarControls`, `AudioInput`, and `TextInput`—let you toggle voice/text chat, mute or unmute the microphone, and send scripted prompts (async/sync talk or repeat tasks).
 - The `useVoiceChat`, `useInterrupt`, and `useConversationState` hooks expose imperative helpers for microphone control, cutting off avatar speech, and driving listening indicators in custom UIs.
 - All session state—stream handles, voice chat flags, message history, and connection quality—lives inside `StreamingAvatarProvider`, so any component can consume it via the context hooks.
