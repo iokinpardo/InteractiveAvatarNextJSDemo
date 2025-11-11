@@ -93,7 +93,7 @@ function InteractiveAvatar({
   systemPrompt,
   avatarId,
   voiceOverrides,
-  expertName,
+  expertName: _expertName,
   narrationMode,
 }: InteractiveAvatarProps) {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
@@ -315,11 +315,7 @@ function InteractiveAvatar({
             ) : (
               <>
                 <LoadingIcon className="animate-spin" />
-                <span className="text-sm text-zinc-300">
-                  {expertName?.trim()
-                    ? `connecting ${expertName.trim().toLowerCase()}…`
-                    : "Connecting to the avatar…"}
-                </span>
+                <span className="text-sm text-zinc-300">connecting agent…</span>
               </>
             )}
           </div>
@@ -328,8 +324,8 @@ function InteractiveAvatar({
       {narrationMode === NarrationMode.WEBHOOK ? (
         <div className="mt-3 rounded-3xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm text-sky-100">
           <p className="text-left">
-            Voice interactions are disabled. The avatar will narrate webhook
-            messages only.
+            Voice interactions are disabled. The avatar will response to
+            chat-messages only.
           </p>
         </div>
       ) : null}

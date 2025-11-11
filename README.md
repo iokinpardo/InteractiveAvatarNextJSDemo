@@ -65,15 +65,15 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 ### Seamless expert transitions
 
-- **Feature name:** Seamless expert transitions with auto-cleanup.
-- **Purpose / What it does:** Ensures any active streaming session is stopped before a new expert preset starts and surfaces a dynamic “connecting {expert}…” overlay while the new video feed comes online.
+- **Feature name:** Seamless expert transitions with consistent agent overlay.
+- **Purpose / What it does:** Ensures any active streaming session is stopped before a new expert preset starts and surfaces a uniform “connecting agent…” banner while the new video feed comes online.
 - **Usage example:**
 
   ```text
   https://your-demo-host?expert=finance → switch to …?expert=marketing
   ```
 
-- **Dependencies / breaking changes:** No breaking changes; the fallback “Connecting to the avatar…” message still appears when no expert preset is active.
+- **Dependencies / breaking changes:** No breaking changes; the connecting banner remains consistent regardless of the selected expert preset.
 
 ### Streamlined session layout
 
@@ -96,6 +96,18 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
   ```
 
 - **Dependencies / breaking changes:** Requires the demo to be running so the SSE subscription at `/api/webhook/stream` stays open; webhook payloads are no longer appended to the transcript.
+
+### Agent response overlay toggle
+
+- **Feature name:** Agent response overlay toggle.
+- **Purpose / What it does:** Lets operators decide whether the on-video agent response card appears by gating the overlay behind an environment variable.
+- **Usage example:**
+
+  ```bash
+  NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=true pnpm dev
+  ```
+
+- **Dependencies / breaking changes:** Disabled by default; set `NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=true` (or `DISPLAY_AGENT_RESPONSE=true` in environments that inject server-side variables into the client bundle) to re-enable the overlay.
 
 ## How it works
 
@@ -132,6 +144,7 @@ Create a `.env.local` file (or equivalent in your hosting platform) with:
 ```dotenv
 HEYGEN_API_KEY=sk_live_your_key_here      # Required for /api/get-access-token
 NEXT_PUBLIC_BASE_API_URL=https://api.heygen.com
+NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=false  # Set to true to surface the agent response overlay
 ```
 
 `HEYGEN_API_KEY` authorizes the token-minting route, while `NEXT_PUBLIC_BASE_API_URL` tells the client SDK which HeyGen region to use when opening the WebRTC session.
