@@ -9,7 +9,7 @@ import {
   STTProvider,
   ElevenLabsModel,
 } from "@heygen/streaming-avatar";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
@@ -102,8 +102,40 @@ function InteractiveAvatar({
 
   const mediaStream = useRef<HTMLVideoElement>(null);
   const hasStarted = useRef(false);
+  const latestStartRequestIdRef = useRef(0);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [voiceChatWarning, setVoiceChatWarning] = useState<string | null>(null);
+
+  const sanitizedSystemPrompt = useMemo(
+    () => systemPrompt?.trim() || undefined,
+    [systemPrompt],
+  );
+  const sanitizedAvatarId = useMemo(
+    () => avatarId?.trim() || undefined,
+    [avatarId],
+  );
+  const sanitizedVoiceOverrides = useMemo(
+    () => sanitizeVoiceOverrides(voiceOverrides),
+    [voiceOverrides],
+  );
+  const sessionInputsSignature = useMemo(
+    () =>
+      JSON.stringify({
+        avatarId: sanitizedAvatarId ?? null,
+        systemPrompt:
+          narrationMode === NarrationMode.CONVERSATIONAL
+            ? (sanitizedSystemPrompt ?? null)
+            : null,
+        voiceOverrides: sanitizedVoiceOverrides ?? null,
+        narrationMode,
+      }),
+    [
+      narrationMode,
+      sanitizedAvatarId,
+      sanitizedSystemPrompt,
+      sanitizedVoiceOverrides,
+    ],
+  );
 
   const getErrorMessage = (error: unknown) => {
     if (error instanceof Error && error.message) {
@@ -132,6 +164,8 @@ function InteractiveAvatar({
   }
 
   const startSession = useMemoizedFn(async () => {
+    const requestId = ++latestStartRequestIdRef.current;
+
     try {
       setSessionError(null);
       setVoiceChatWarning(null);
@@ -140,6 +174,10 @@ function InteractiveAvatar({
 
       if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
         await stopAvatar();
+      }
+
+      if (latestStartRequestIdRef.current !== requestId) {
+        return;
       }
 
       const newToken = await tokenPromise;
@@ -176,10 +214,6 @@ function InteractiveAvatar({
         console.log(">>>>> Avatar end message:", event);
       });
 
-      const sanitizedSystemPrompt = systemPrompt?.trim() || undefined;
-      const sanitizedAvatarId = avatarId?.trim() || undefined;
-      const sanitizedVoiceOverrides = sanitizeVoiceOverrides(voiceOverrides);
-
       const startConfig = createDefaultConfig({
         systemPrompt:
           narrationMode === NarrationMode.CONVERSATIONAL
@@ -207,13 +241,27 @@ function InteractiveAvatar({
         console.log("Applying voice overrides", sanitizedVoiceOverrides);
       }
 
+      if (latestStartRequestIdRef.current !== requestId) {
+        return;
+      }
+
       await startAvatar(startConfig);
+
+      if (latestStartRequestIdRef.current !== requestId) {
+        return;
+      }
 
       if (narrationMode === NarrationMode.CONVERSATIONAL) {
         try {
           await startVoiceChat();
+          if (latestStartRequestIdRef.current !== requestId) {
+            return;
+          }
           setVoiceChatWarning(null);
         } catch (voiceChatError) {
+          if (latestStartRequestIdRef.current !== requestId) {
+            return;
+          }
           const warningMessage =
             "Voice chat could not start automatically. The avatar is running without microphone input.";
 
@@ -224,6 +272,10 @@ function InteractiveAvatar({
         }
       }
     } catch (error) {
+      if (latestStartRequestIdRef.current !== requestId) {
+        return;
+      }
+
       hasStarted.current = false;
       const message = getErrorMessage(error);
 
@@ -264,9 +316,10 @@ function InteractiveAvatar({
   useEffect(() => {
     if (!hasStarted.current) {
       hasStarted.current = true;
-      startSession();
     }
-  }, [startSession]);
+
+    startSession();
+  }, [sessionInputsSignature, startSession]);
 
   useEffect(() => {
     if (narrationMode === NarrationMode.WEBHOOK && systemPrompt?.trim()) {

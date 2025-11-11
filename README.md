@@ -63,17 +63,17 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Supported ElevenLabs models:** `eleven_flash_v2_5`, `eleven_multilingual_v2`.
 - **Dependencies / breaking changes:** Relies on the enumerations exported by `@heygen/streaming-avatar`; defaults remain unchanged when parameters are omitted or invalid.
 
-### Seamless expert transitions
+### Responsive avatar switching
 
-- **Feature name:** Seamless expert transitions with consistent agent overlay.
-- **Purpose / What it does:** Ensures any active streaming session is stopped before a new expert preset starts and surfaces a uniform “connecting agent…” banner while the new video feed comes online.
+- **Feature name:** Responsive avatar switching with consistent agent overlay.
+- **Purpose / What it does:** Tears down the previous streaming session before booting a new one whenever `avatarId`, expert presets, or narration inputs change so the video feed never stalls on quick successive swaps, all while keeping the “connecting agent…” banner stable during reconnects.
 - **Usage example:**
 
   ```text
-  https://your-demo-host?expert=finance → switch to …?expert=marketing
+  https://your-demo-host?avatar_id=Graham_Chair_Sitting_public → swap to …?avatar_id=Anastasia_Chair_Sitting_public
   ```
 
-- **Dependencies / breaking changes:** No breaking changes; the connecting banner remains consistent regardless of the selected expert preset.
+- **Dependencies / breaking changes:** No breaking changes; the consistent connecting banner and webhook disclaimer still apply regardless of how often the avatar profile changes.
 
 ### Streamlined session layout
 
