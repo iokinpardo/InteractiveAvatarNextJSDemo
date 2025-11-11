@@ -35,6 +35,51 @@ export const useStreamingAvatarSession = () => {
   useMessageHistory();
 
   const listenersRef = useRef<Array<[StreamingEvents, EventHandler]>>([]);
+  const sessionInfoRef = useRef<{
+    sessionId: string;
+    token: string;
+  } | null>(null);
+
+  const stopSessionViaApi = useCallback(
+    async (session?: { sessionId: string; token: string }) => {
+      const activeSession = session ?? sessionInfoRef.current;
+
+      if (!activeSession || !basePath) {
+        return;
+      }
+
+      const url = `${basePath.replace(/\/$/, "")}/v1/streaming.stop`;
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${activeSession.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ session_id: activeSession.sessionId }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+
+          throw new Error(
+            `Streaming stop fallback failed with status ${response.status}${
+              errorText ? `: ${errorText}` : ""
+            }`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to close streaming session via REST fallback",
+          error,
+        );
+      } finally {
+        sessionInfoRef.current = null;
+      }
+    },
+    [basePath],
+  );
 
   const init = useCallback(
     (token: string) => {
@@ -101,8 +146,26 @@ export const useStreamingAvatarSession = () => {
     setIsUserTalking(false);
     setIsAvatarTalking(false);
     setStream(null);
-    await avatarRef.current?.stopAvatar();
-    setSessionState(StreamingAvatarSessionState.INACTIVE);
+
+    const activeSession = sessionInfoRef.current ?? undefined;
+
+    if (!avatarRef.current && activeSession) {
+      await stopSessionViaApi(activeSession);
+      setSessionState(StreamingAvatarSessionState.INACTIVE);
+
+      return;
+    }
+
+    try {
+      await avatarRef.current?.stopAvatar();
+      sessionInfoRef.current = null;
+    } catch (error) {
+      console.error("Error stopping streaming avatar session via SDK", error);
+      await stopSessionViaApi(activeSession);
+    } finally {
+      sessionInfoRef.current = null;
+      setSessionState(StreamingAvatarSessionState.INACTIVE);
+    }
   }, [
     detachListeners,
     avatarRef,
@@ -113,6 +176,7 @@ export const useStreamingAvatarSession = () => {
     setIsAvatarTalking,
     setStream,
     setSessionState,
+    stopSessionViaApi,
   ]);
 
   const handleStreamDisconnected = useCallback(() => {
@@ -183,7 +247,14 @@ export const useStreamingAvatarSession = () => {
       attachListeners();
 
       try {
-        await avatarRef.current.createStartAvatar(config);
+        const sessionInfo = await avatarRef.current.createStartAvatar(config);
+
+        if (sessionInfo?.session_id && token) {
+          sessionInfoRef.current = {
+            sessionId: sessionInfo.session_id,
+            token,
+          };
+        }
       } catch (error) {
         detachListeners();
         setSessionState(StreamingAvatarSessionState.INACTIVE);
