@@ -5,6 +5,12 @@ import { useConnectionQuality } from "../logic/useConnectionQuality";
 import { useStreamingAvatarSession } from "../logic/useStreamingAvatarSession";
 import { StreamingAvatarSessionState, useWebhookMessage } from "../logic";
 
+const rawDisplayAgentResponse =
+  process.env.NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE ??
+  process.env.DISPLAY_AGENT_RESPONSE ??
+  "";
+const displayAgentResponse = rawDisplayAgentResponse.toLowerCase() === "true";
+
 export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
   const { sessionState } = useStreamingAvatarSession();
   const { connectionQuality } = useConnectionQuality();
@@ -16,10 +22,10 @@ export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
 
   return (
     <>
-      {latestWebhookMessage ? (
+      {latestWebhookMessage && displayAgentResponse ? (
         <div className="absolute top-3 left-3 z-20 max-w-[280px] rounded-lg bg-black/90 px-3 py-2 text-white shadow-lg">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">
-            Incoming webhook
+            AGENT RESPONSE
           </p>
           <p className="mt-1 text-sm break-words">
             {latestWebhookMessage.message}

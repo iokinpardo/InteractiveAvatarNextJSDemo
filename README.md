@@ -63,17 +63,17 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 - **Supported ElevenLabs models:** `eleven_flash_v2_5`, `eleven_multilingual_v2`.
 - **Dependencies / breaking changes:** Relies on the enumerations exported by `@heygen/streaming-avatar`; defaults remain unchanged when parameters are omitted or invalid.
 
-### Seamless expert transitions
+### Responsive avatar switching
 
-- **Feature name:** Seamless expert transitions with auto-cleanup.
-- **Purpose / What it does:** Ensures any active streaming session is stopped before a new expert preset starts and surfaces a dynamic “connecting {expert}…” overlay while the new video feed comes online.
+- **Feature name:** Responsive avatar switching with consistent agent overlay.
+- **Purpose / What it does:** Tears down the previous streaming session before booting a new one whenever `avatarId`, expert presets, or narration inputs change so the video feed never stalls on quick successive swaps, all while keeping the “connecting agent…” banner stable during reconnects. If the SDK cannot end the prior call cleanly, the app now falls back to HeyGen’s `streaming.stop` REST endpoint so a lingering session never blocks the next avatar load.
 - **Usage example:**
 
   ```text
-  https://your-demo-host?expert=finance → switch to …?expert=marketing
+  https://your-demo-host?avatar_id=Graham_Chair_Sitting_public → swap to …?avatar_id=Anastasia_Chair_Sitting_public
   ```
 
-- **Dependencies / breaking changes:** No breaking changes; the fallback “Connecting to the avatar…” message still appears when no expert preset is active.
+- **Dependencies / breaking changes:** No breaking changes; the consistent connecting banner and webhook disclaimer still apply regardless of how often the avatar profile changes.
 
 ### Streamlined session layout
 
@@ -96,6 +96,18 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
   ```
 
 - **Dependencies / breaking changes:** Requires the demo to be running so the SSE subscription at `/api/webhook/stream` stays open; webhook payloads are no longer appended to the transcript.
+
+### Agent response overlay toggle
+
+- **Feature name:** Agent response overlay toggle.
+- **Purpose / What it does:** Lets operators decide whether the on-video agent response card appears by gating the overlay behind an environment variable.
+- **Usage example:**
+
+  ```bash
+  NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=true pnpm dev
+  ```
+
+- **Dependencies / breaking changes:** Disabled by default; set `NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=true` (or `DISPLAY_AGENT_RESPONSE=true` in environments that inject server-side variables into the client bundle) to re-enable the overlay.
 
 ## How it works
 
@@ -132,6 +144,7 @@ Create a `.env.local` file (or equivalent in your hosting platform) with:
 ```dotenv
 HEYGEN_API_KEY=sk_live_your_key_here      # Required for /api/get-access-token
 NEXT_PUBLIC_BASE_API_URL=https://api.heygen.com
+NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=false  # Set to true to surface the agent response overlay
 ```
 
 `HEYGEN_API_KEY` authorizes the token-minting route, while `NEXT_PUBLIC_BASE_API_URL` tells the client SDK which HeyGen region to use when opening the WebRTC session.
