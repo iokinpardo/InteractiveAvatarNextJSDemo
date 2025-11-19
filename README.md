@@ -97,18 +97,6 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 - **Dependencies / breaking changes:** Requires the demo to be running so the SSE subscription at `/api/webhook/stream` stays open; webhook payloads are no longer appended to the transcript.
 
-### Agent response overlay toggle
-
-- **Feature name:** Agent response overlay toggle.
-- **Purpose / What it does:** Lets operators decide whether the on-video agent response card appears by gating the overlay behind an environment variable.
-- **Usage example:**
-
-  ```bash
-  NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=true pnpm dev
-  ```
-
-- **Dependencies / breaking changes:** Disabled by default; set `NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=true` (or `DISPLAY_AGENT_RESPONSE=true` in environments that inject server-side variables into the client bundle) to re-enable the overlay.
-
 ## How it works
 
 1. **Query parameters are resolved on the server** and passed into the `InteractiveAvatar` provider before the page renders.
@@ -144,7 +132,6 @@ Create a `.env.local` file (or equivalent in your hosting platform) with:
 ```dotenv
 HEYGEN_API_KEY=sk_live_your_key_here      # Required for /api/get-access-token
 NEXT_PUBLIC_BASE_API_URL=https://api.heygen.com
-NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE=false  # Set to true to surface the agent response overlay
 ```
 
 `HEYGEN_API_KEY` authorizes the token-minting route, while `NEXT_PUBLIC_BASE_API_URL` tells the client SDK which HeyGen region to use when opening the WebRTC session.
