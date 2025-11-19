@@ -95,6 +95,10 @@ export default async function App({ searchParams }: PageProps) {
   const narrationMode =
     matchEnumParam(rawNarrationMode, Object.values(NarrationMode)) ??
     NarrationMode.WEBHOOK;
+  const rawSessionId =
+    extractParam(resolvedSearchParams.sessionId) ??
+    extractParam(resolvedSearchParams.session_id);
+  const sessionId = rawSessionId?.trim();
 
   return (
     <div className="mx-auto flex w-full max-w-[900px] justify-center px-4 py-6">
@@ -104,6 +108,7 @@ export default async function App({ searchParams }: PageProps) {
         narrationMode={narrationMode}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
+        sessionId={sessionId}
       />
     </div>
   );

@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  getHeyGenSessionId,
+  unregisterSessionMapping,
+} from "@/app/lib/sessionMapping";
 
 const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
 
@@ -45,18 +49,32 @@ export async function POST(request: Request) {
       );
     }
 
+    // Translate custom sessionId to HeyGen sessionId
+    const heygenSessionId = getHeyGenSessionId(sessionId);
+
+    if (!heygenSessionId) {
+      return NextResponse.json(
+        {
+          error:
+            "Session not found. The session may not be registered or may have expired.",
+        },
+        { status: 404 },
+      );
+    }
+
     const baseApiUrl =
       process.env.NEXT_PUBLIC_BASE_API_URL || "https://api.heygen.com";
 
     const requestBody = {
-      session_id: sessionId.trim(),
+      session_id: heygenSessionId,
     };
 
     const url = `${baseApiUrl}/v1/streaming.stop`;
 
     console.log("Closing session via HeyGen API:", {
       url,
-      sessionId: sessionId.trim(),
+      customSessionId: sessionId.trim(),
+      heygenSessionId,
       hasApiKey: !!HEYGEN_API_KEY,
     });
 
@@ -87,6 +105,9 @@ export async function POST(request: Request) {
         { status: response.status },
       );
     }
+
+    // Unregister the mapping after successful closure
+    unregisterSessionMapping(sessionId);
 
     const data = await response.json();
 

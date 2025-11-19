@@ -87,6 +87,7 @@ type InteractiveAvatarProps = {
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
   narrationMode: NarrationMode;
+  sessionId?: string;
 };
 
 function InteractiveAvatar({
@@ -95,9 +96,16 @@ function InteractiveAvatar({
   voiceOverrides,
   expertName: _expertName,
   narrationMode,
+  sessionId: customSessionId,
 }: InteractiveAvatarProps) {
-  const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
-    useStreamingAvatarSession();
+  const {
+    initAvatar,
+    startAvatar,
+    stopAvatar,
+    sessionState,
+    stream,
+    sessionId: heygenSessionId,
+  } = useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
 
   const mediaStream = useRef<HTMLVideoElement>(null);
@@ -329,6 +337,42 @@ function InteractiveAvatar({
     }
   }, [narrationMode, systemPrompt]);
 
+  // Register session mapping when both customSessionId and heygenSessionId are available
+  useEffect(() => {
+    if (
+      customSessionId &&
+      heygenSessionId &&
+      sessionState === StreamingAvatarSessionState.CONNECTED
+    ) {
+      // Register the mapping
+      fetch("/api/avatar/register-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customSessionId: customSessionId,
+          heygenSessionId: heygenSessionId,
+        }),
+      })
+        .then((response) => {
+          if (response.ok) {
+            console.log(
+              `Registered session mapping: ${customSessionId} -> ${heygenSessionId}`,
+            );
+          } else {
+            console.warn(
+              "Failed to register session mapping:",
+              response.statusText,
+            );
+          }
+        })
+        .catch((error) => {
+          console.error("Error registering session mapping:", error);
+        });
+    }
+  }, [customSessionId, heygenSessionId, sessionState]);
+
   useUnmount(() => {
     stopAvatar();
   });
@@ -404,6 +448,7 @@ type InteractiveAvatarWrapperProps = {
   voiceOverrides?: VoiceOverrides;
   expertName?: string;
   narrationMode?: NarrationMode;
+  sessionId?: string;
 };
 
 export default function InteractiveAvatarWrapper({
@@ -412,6 +457,7 @@ export default function InteractiveAvatarWrapper({
   voiceOverrides,
   expertName,
   narrationMode = NarrationMode.CONVERSATIONAL,
+  sessionId,
 }: InteractiveAvatarWrapperProps) {
   return (
     <StreamingAvatarProvider
@@ -424,6 +470,7 @@ export default function InteractiveAvatarWrapper({
         narrationMode={narrationMode}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
+        sessionId={sessionId}
       />
     </StreamingAvatarProvider>
   );
