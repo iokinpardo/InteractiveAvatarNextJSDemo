@@ -101,7 +101,7 @@ export default async function App({ searchParams }: PageProps) {
   const sessionId = rawSessionId?.trim();
 
   return (
-    <div className="mx-auto flex w-full max-w-[900px] justify-center px-4 py-6">
+    <div className="h-full w-full">
       <InteractiveAvatar
         avatarId={avatarId}
         expertName={selectedExpert}
