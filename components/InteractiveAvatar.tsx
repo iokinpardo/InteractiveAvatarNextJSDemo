@@ -64,7 +64,7 @@ const createDefaultConfig = ({
 	avatarId,
 	voiceOverrides,
 }: CreateDefaultConfigArgs): StartAvatarRequest => ({
-	quality: AvatarQuality.Low,
+	quality: AvatarQuality.Medium,
 	avatarName: avatarId ?? "Ann_Therapist_public",
 	knowledgeId: undefined,
 	...(systemPrompt ? { knowledgeBase: systemPrompt } : {}),
