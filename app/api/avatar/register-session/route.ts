@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   registerSessionMapping,
   hasSessionMapping,
+  getHeyGenSessionId,
 } from "@/app/lib/sessionMapping";
 
 export const runtime = "nodejs";
@@ -61,23 +62,46 @@ export async function POST(request: Request) {
     }
 
     // Check if mapping already exists
-    if (hasSessionMapping(customSessionId)) {
-      return NextResponse.json(
-        {
-          error: "Session mapping already exists",
-          customSessionId: customSessionId.trim(),
-        },
-        { status: 409 },
-      );
+    const trimmedCustomId = customSessionId.trim();
+    const trimmedHeyGenId = heygenSessionId.trim();
+
+    if (await hasSessionMapping(trimmedCustomId)) {
+      // Get existing mapping to check if it's the same
+      // Since hasSessionMapping confirmed a mapping exists, getHeyGenSessionId will return the mapped value
+      const existingHeyGenId = await getHeyGenSessionId(trimmedCustomId);
+
+      if (existingHeyGenId === trimmedHeyGenId) {
+        // Same mapping - idempotent, return success
+        return NextResponse.json(
+          {
+            ok: true,
+            customSessionId: trimmedCustomId,
+            heygenSessionId: trimmedHeyGenId,
+            message: "Session mapping already exists and matches",
+          },
+          { status: 200 },
+        );
+      } else {
+        // Different mapping - this is an error
+        return NextResponse.json(
+          {
+            error: "Session mapping already exists with a different HeyGen session ID",
+            customSessionId: trimmedCustomId,
+            existingHeyGenId,
+            requestedHeyGenId: trimmedHeyGenId,
+          },
+          { status: 409 },
+        );
+      }
     }
 
-    registerSessionMapping(customSessionId, heygenSessionId);
+    await registerSessionMapping(trimmedCustomId, trimmedHeyGenId);
 
     return NextResponse.json(
       {
         ok: true,
-        customSessionId: customSessionId.trim(),
-        heygenSessionId: heygenSessionId.trim(),
+        customSessionId: trimmedCustomId,
+        heygenSessionId: trimmedHeyGenId,
       },
       { status: 200 },
     );

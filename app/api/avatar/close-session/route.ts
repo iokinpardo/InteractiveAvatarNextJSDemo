@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     }
 
     // Translate custom sessionId to HeyGen sessionId
-    const heygenSessionId = getHeyGenSessionId(sessionId);
+    const heygenSessionId = await getHeyGenSessionId(sessionId);
 
     if (!heygenSessionId) {
       return NextResponse.json(
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     }
 
     // Unregister the mapping after successful closure
-    unregisterSessionMapping(sessionId);
+    await unregisterSessionMapping(sessionId);
 
     const data = await response.json();
 

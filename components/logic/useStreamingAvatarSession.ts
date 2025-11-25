@@ -128,6 +128,8 @@ export const useStreamingAvatarSession = () => {
   }, [avatarRef]);
 
   const stop = useCallback(async () => {
+    // Set state to DISCONNECTING before cleaning up resources
+    setSessionState(StreamingAvatarSessionState.DISCONNECTING);
     detachListeners();
     clearMessages();
     stopVoiceChat();

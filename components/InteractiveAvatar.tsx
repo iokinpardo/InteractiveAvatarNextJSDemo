@@ -340,37 +340,88 @@ function InteractiveAvatar({
 	// Register session mapping when both customSessionId and heygenSessionId are available
 	useEffect(() => {
 		if (
-			customSessionId &&
-			heygenSessionId &&
-			sessionState === StreamingAvatarSessionState.CONNECTED
+			!customSessionId ||
+			!heygenSessionId ||
+			sessionState !== StreamingAvatarSessionState.CONNECTED
 		) {
-			// Register the mapping
-			fetch("/api/avatar/register-session", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					customSessionId: customSessionId,
-					heygenSessionId: heygenSessionId,
-				}),
-			})
-				.then((response) => {
-					if (response.ok) {
-						console.log(
-							`Registered session mapping: ${customSessionId} -> ${heygenSessionId}`,
-						);
+			return;
+		}
+
+		let isCancelled = false;
+		let retryCount = 0;
+		const MAX_RETRIES = 3;
+		const RETRY_DELAY = 1000; // 1 second
+
+		const registerMapping = async () => {
+			if (isCancelled) {
+				return;
+			}
+
+			try {
+				const response = await fetch("/api/avatar/register-session", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						customSessionId: customSessionId,
+						heygenSessionId: heygenSessionId,
+					}),
+				});
+
+				if (response.ok) {
+					console.log(
+						`Registered session mapping: ${customSessionId} -> ${heygenSessionId}`,
+					);
+				} else if (response.status === 409) {
+					// Mapping already exists - this is OK if it's the same mapping
+					const data = await response.json().catch(() => ({}));
+					console.log(
+						`Session mapping already exists: ${customSessionId} -> ${heygenSessionId}`,
+						data,
+					);
+				} else {
+					// Retry on other errors
+					const errorText = await response.text().catch(() => response.statusText);
+					console.warn(
+						`Failed to register session mapping (attempt ${retryCount + 1}/${MAX_RETRIES}):`,
+						response.status,
+						errorText,
+					);
+
+					if (retryCount < MAX_RETRIES && !isCancelled) {
+						retryCount++;
+						setTimeout(() => {
+							if (!isCancelled) {
+								registerMapping();
+							}
+						}, RETRY_DELAY);
 					} else {
-						console.warn(
-							"Failed to register session mapping:",
-							response.statusText,
+						console.error(
+							`Failed to register session mapping after ${MAX_RETRIES} attempts`,
 						);
 					}
-				})
-				.catch((error) => {
-					console.error("Error registering session mapping:", error);
-				});
-		}
+				}
+			} catch (error) {
+				console.error("Error registering session mapping:", error);
+
+				// Retry on network errors
+				if (retryCount < MAX_RETRIES && !isCancelled) {
+					retryCount++;
+					setTimeout(() => {
+						if (!isCancelled) {
+							registerMapping();
+						}
+					}, RETRY_DELAY);
+				}
+			}
+		};
+
+		registerMapping();
+
+		return () => {
+			isCancelled = true;
+		};
 	}, [customSessionId, heygenSessionId, sessionState]);
 
 	useUnmount(() => {
@@ -408,12 +459,19 @@ function InteractiveAvatar({
 								Try again
 							</button>
 						</>
-					) : (
+					) : sessionState === StreamingAvatarSessionState.CONNECTING ? (
 						<>
 							<LoadingIcon className="animate-spin" />
 							<span className="text-sm text-zinc-300">connecting agent…</span>
 						</>
-					)}
+					) : sessionState === StreamingAvatarSessionState.DISCONNECTING ? (
+						<>
+							<LoadingIcon className="animate-spin" />
+							<span className="text-sm text-zinc-300">Disconnecting…</span>
+						</>
+					) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
+						<span className="text-sm text-zinc-300">Session closed</span>
+					) : null}
 				</div>
 			) : null}
 			{narrationMode === NarrationMode.WEBHOOK ? (

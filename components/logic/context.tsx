@@ -13,6 +13,7 @@ export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
   CONNECTING = "connecting",
   CONNECTED = "connected",
+  DISCONNECTING = "disconnecting",
 }
 
 export enum MessageSender {

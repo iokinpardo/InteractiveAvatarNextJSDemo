@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     }
 
     // Translate custom sessionId to HeyGen sessionId
-    const heygenSessionId = getHeyGenSessionId(sessionId);
+    const heygenSessionId = await getHeyGenSessionId(sessionId);
 
     if (!heygenSessionId) {
       return NextResponse.json(
