@@ -26,10 +26,6 @@ export const MessageHistory: React.FC = () => {
             return "Avatar";
           }
 
-          if (message.sender === MessageSender.WEBHOOK) {
-            return message.botId ? `Webhook (${message.botId})` : "Webhook";
-          }
-
           return "You";
         })();
 
@@ -40,15 +36,7 @@ export const MessageHistory: React.FC = () => {
               isClient ? "self-end items-end" : "self-start items-start"
             }`}
           >
-            <p
-              className={`text-xs ${
-                message.sender === MessageSender.WEBHOOK
-                  ? "text-sky-300"
-                  : "text-zinc-400"
-              }`}
-            >
-              {senderLabel}
-            </p>
+            <p className="text-xs text-zinc-400">{senderLabel}</p>
             <p className="text-sm">{message.content}</p>
           </div>
         );

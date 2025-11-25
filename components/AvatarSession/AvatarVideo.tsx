@@ -1,64 +1,18 @@
 import React, { forwardRef } from "react";
-import { ConnectionQuality } from "@heygen/streaming-avatar";
 
-import { useConnectionQuality } from "../logic/useConnectionQuality";
-import { useStreamingAvatarSession } from "../logic/useStreamingAvatarSession";
-import { StreamingAvatarSessionState, useWebhookMessage } from "../logic";
+export const AvatarVideo = forwardRef<HTMLVideoElement>(({ }, ref) => {
 
-const rawDisplayAgentResponse =
-  process.env.NEXT_PUBLIC_DISPLAY_AGENT_RESPONSE ??
-  process.env.DISPLAY_AGENT_RESPONSE ??
-  "";
-const displayAgentResponse = rawDisplayAgentResponse.toLowerCase() === "true";
-
-export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
-  const { sessionState } = useStreamingAvatarSession();
-  const { connectionQuality } = useConnectionQuality();
-  const { latestWebhookMessage } = useWebhookMessage();
-
-  const isLoaded = sessionState === StreamingAvatarSessionState.CONNECTED;
-  const shouldShowConnectionQuality =
-    !latestWebhookMessage && connectionQuality !== ConnectionQuality.UNKNOWN;
-
-  return (
-    <>
-      {latestWebhookMessage && displayAgentResponse ? (
-        <div className="absolute top-3 left-3 z-20 max-w-[280px] rounded-lg bg-black/90 px-3 py-2 text-white shadow-lg">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-300">
-            AGENT RESPONSE
-          </p>
-          <p className="mt-1 text-sm break-words">
-            {latestWebhookMessage.message}
-          </p>
-          {latestWebhookMessage.botId && (
-            <p className="mt-1 text-xs text-zinc-300">
-              Bot ID: {latestWebhookMessage.botId}
-            </p>
-          )}
-        </div>
-      ) : shouldShowConnectionQuality ? (
-        <div className="absolute top-3 left-3 rounded-lg bg-black text-white px-3 py-2">
-          Connection Quality: {connectionQuality}
-        </div>
-      ) : null}
-      <video
-        ref={ref}
-        autoPlay
-        playsInline
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-        }}
-      >
-        <track kind="captions" />
-      </video>
-      {!isLoaded && (
-        <div className="w-full h-full flex items-center justify-center absolute top-0 left-0">
-          Loading...
-        </div>
-      )}
-    </>
-  );
+	return (
+		<div className="relative w-full h-full overflow-hidden">
+			<video
+				ref={ref}
+				autoPlay
+				playsInline
+				className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+			>
+				<track kind="captions" />
+			</video>
+		</div>
+	);
 });
 AvatarVideo.displayName = "AvatarVideo";

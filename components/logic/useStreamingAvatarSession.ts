@@ -4,7 +4,7 @@ import StreamingAvatar, {
   StreamingEvents,
   type EventHandler,
 } from "@heygen/streaming-avatar";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import {
   StreamingAvatarSessionState,
@@ -21,6 +21,8 @@ export const useStreamingAvatarSession = () => {
     setSessionState,
     stream,
     setStream,
+    sessionId,
+    setSessionId,
     setIsListening,
     setIsUserTalking,
     setIsAvatarTalking,
@@ -54,6 +56,38 @@ export const useStreamingAvatarSession = () => {
       setSessionState(StreamingAvatarSessionState.CONNECTED);
     },
     [setSessionState, setStream],
+  );
+
+  const handleStreamReady = useCallback(
+    (event: {
+      detail: MediaStream | { session_id?: string; stream?: MediaStream };
+    }) => {
+      // Try to get session_id from STREAM_READY event detail if available
+      if (
+        event.detail &&
+        typeof event.detail === "object" &&
+        "session_id" in event.detail
+      ) {
+        const detail = event.detail as {
+          session_id?: string;
+          stream?: MediaStream;
+        };
+
+        if (detail.session_id) {
+          setSessionId(detail.session_id);
+        }
+
+        // If there's a stream in the detail, use it
+        if (detail.stream) {
+          setStream(detail.stream);
+          setSessionState(StreamingAvatarSessionState.CONNECTED);
+        }
+      } else if (event.detail instanceof MediaStream) {
+        // Standard case: detail is MediaStream
+        handleStream(event as { detail: MediaStream });
+      }
+    },
+    [handleStream, setSessionId, setStream, setSessionState],
   );
 
   const handleConnectionQualityChange = useCallback(
@@ -94,6 +128,8 @@ export const useStreamingAvatarSession = () => {
   }, [avatarRef]);
 
   const stop = useCallback(async () => {
+    // Set state to DISCONNECTING before cleaning up resources
+    setSessionState(StreamingAvatarSessionState.DISCONNECTING);
     detachListeners();
     clearMessages();
     stopVoiceChat();
@@ -101,6 +137,7 @@ export const useStreamingAvatarSession = () => {
     setIsUserTalking(false);
     setIsAvatarTalking(false);
     setStream(null);
+    setSessionId(null);
     await avatarRef.current?.stopAvatar();
     setSessionState(StreamingAvatarSessionState.INACTIVE);
   }, [
@@ -112,12 +149,82 @@ export const useStreamingAvatarSession = () => {
     setIsUserTalking,
     setIsAvatarTalking,
     setStream,
+    setSessionId,
     setSessionState,
   ]);
 
   const handleStreamDisconnected = useCallback(() => {
     stop();
   }, [stop]);
+
+  // Detect when stream is disconnected externally (e.g., via API call)
+  useEffect(() => {
+    if (!stream || sessionState === StreamingAvatarSessionState.INACTIVE) {
+      return;
+    }
+
+    // Store stream reference to avoid stale closures
+    const currentStream = stream;
+    let isCleanedUp = false;
+
+    const checkStreamActive = () => {
+      if (isCleanedUp) {
+        return;
+      }
+
+      // Check if stream is still active
+      if (currentStream && !currentStream.active) {
+        console.log("Stream is no longer active, stopping session");
+        isCleanedUp = true;
+        stop();
+        return;
+      }
+
+      // Check if any tracks have ended
+      try {
+        const endedTracks = currentStream
+          .getTracks()
+          .filter((track) => track.readyState === "ended");
+        if (endedTracks.length > 0) {
+          console.log("Stream tracks have ended, stopping session");
+          isCleanedUp = true;
+          stop();
+          return;
+        }
+      } catch (error) {
+        // Stream may have been cleaned up
+        console.log("Error checking stream tracks, stopping session", error);
+        isCleanedUp = true;
+        stop();
+      }
+    };
+
+    // Set up listeners for track ended events
+    const handleTrackEnded = () => {
+      if (isCleanedUp) {
+        return;
+      }
+      console.log("Stream track ended, stopping session");
+      isCleanedUp = true;
+      stop();
+    };
+
+    const tracks = currentStream.getTracks();
+    tracks.forEach((track) => {
+      track.addEventListener("ended", handleTrackEnded);
+    });
+
+    // Periodic check for stream state (fallback)
+    const intervalId = setInterval(checkStreamActive, 1000);
+
+    return () => {
+      isCleanedUp = true;
+      tracks.forEach((track) => {
+        track.removeEventListener("ended", handleTrackEnded);
+      });
+      clearInterval(intervalId);
+    };
+  }, [stream, sessionState, stop]);
 
   const attachListeners = useCallback(() => {
     const avatar = avatarRef.current;
@@ -127,7 +234,7 @@ export const useStreamingAvatarSession = () => {
     }
 
     const listeners: Array<[StreamingEvents, EventHandler]> = [
-      [StreamingEvents.STREAM_READY, handleStream],
+      [StreamingEvents.STREAM_READY, handleStreamReady],
       [StreamingEvents.STREAM_DISCONNECTED, handleStreamDisconnected],
       [
         StreamingEvents.CONNECTION_QUALITY_CHANGED,
@@ -154,7 +261,7 @@ export const useStreamingAvatarSession = () => {
     handleAvatarStopTalking,
     handleConnectionQualityChange,
     handleEndMessage,
-    handleStream,
+    handleStreamReady,
     handleStreamDisconnected,
     handleStreamingTalkingMessage,
     handleUserStart,
@@ -183,10 +290,17 @@ export const useStreamingAvatarSession = () => {
       attachListeners();
 
       try {
-        await avatarRef.current.createStartAvatar(config);
+        const result = await avatarRef.current.createStartAvatar(config);
+
+        // Try to get session_id from the result if available
+        if (result && typeof result === "object" && "session_id" in result) {
+          setSessionId((result as { session_id: string }).session_id);
+        }
       } catch (error) {
         detachListeners();
         setSessionState(StreamingAvatarSessionState.INACTIVE);
+        setSessionId(null);
+
         throw error;
       }
 
@@ -199,15 +313,144 @@ export const useStreamingAvatarSession = () => {
       sessionState,
       avatarRef,
       setSessionState,
+      setSessionId,
     ],
   );
+
+  const closeSession = useCallback(
+    async (sessionIdToClose: string) => {
+      try {
+        const response = await fetch("/api/avatar/close-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ sessionId: sessionIdToClose }),
+        });
+
+        if (!response.ok) {
+          console.error("Failed to close session via API");
+        }
+      } catch (error) {
+        console.error("Error closing session via API:", error);
+      } finally {
+        // Always stop the local session state regardless of API call result
+        await stop();
+      }
+    },
+    [stop],
+  );
+
+  // Detect when session is in CONNECTING state for too long (timeout)
+  // This handles cases where the session is closed externally before stream is ready
+  useEffect(() => {
+    if (sessionState !== StreamingAvatarSessionState.CONNECTING) {
+      return;
+    }
+
+    const connectingStartTime = Date.now();
+    const CONNECTING_TIMEOUT = 5000; // 5 seconds - faster timeout for immediate detection
+
+    // Check periodically if we're still connecting without a stream
+    const checkInterval = setInterval(() => {
+      const elapsed = Date.now() - connectingStartTime;
+      
+      // If we've been connecting for too long without a stream, reset
+      // This handles cases where the session is closed externally before stream is ready
+      if (
+        !stream &&
+        sessionState === StreamingAvatarSessionState.CONNECTING &&
+        elapsed >= CONNECTING_TIMEOUT
+      ) {
+        console.log("Connection timeout (session may have been closed externally), resetting session state");
+        setSessionState(StreamingAvatarSessionState.INACTIVE);
+        setSessionId(null);
+        clearInterval(checkInterval);
+      }
+    }, 500); // Check every 500ms for faster detection
+
+    return () => {
+      clearInterval(checkInterval);
+    };
+  }, [sessionState, stream, setSessionState, setSessionId]);
+
+  // Detect when stream is disconnected externally (e.g., via API call)
+  useEffect(() => {
+    if (!stream || sessionState === StreamingAvatarSessionState.INACTIVE) {
+      return;
+    }
+
+    // Store stream reference to avoid stale closures
+    const currentStream = stream;
+    let isCleanedUp = false;
+
+    const checkStreamActive = () => {
+      if (isCleanedUp) {
+        return;
+      }
+
+      // Check if stream is still active
+      if (currentStream && !currentStream.active) {
+        console.log("Stream is no longer active, stopping session");
+        isCleanedUp = true;
+        stop();
+        return;
+      }
+
+      // Check if any tracks have ended
+      try {
+        const endedTracks = currentStream
+          .getTracks()
+          .filter((track) => track.readyState === "ended");
+        if (endedTracks.length > 0) {
+          console.log("Stream tracks have ended, stopping session");
+          isCleanedUp = true;
+          stop();
+          return;
+        }
+      } catch (error) {
+        // Stream may have been cleaned up
+        console.log("Error checking stream tracks, stopping session", error);
+        isCleanedUp = true;
+        stop();
+      }
+    };
+
+    // Set up listeners for track ended events
+    const handleTrackEnded = () => {
+      if (isCleanedUp) {
+        return;
+      }
+      console.log("Stream track ended, stopping session");
+      isCleanedUp = true;
+      stop();
+    };
+
+    const tracks = currentStream.getTracks();
+    tracks.forEach((track) => {
+      track.addEventListener("ended", handleTrackEnded);
+    });
+
+    // Periodic check for stream state (fallback)
+    const intervalId = setInterval(checkStreamActive, 1000);
+
+    return () => {
+      isCleanedUp = true;
+      tracks.forEach((track) => {
+        track.removeEventListener("ended", handleTrackEnded);
+      });
+      clearInterval(intervalId);
+    };
+  }, [stream, sessionState, stop]);
 
   return {
     avatarRef,
     sessionState,
     stream,
+    sessionId,
     initAvatar: init,
     startAvatar: start,
     stopAvatar: stop,
+    closeSession,
   };
 };

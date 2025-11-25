@@ -4,10 +4,8 @@ import StreamingAvatar, {
   ConnectionQuality,
   StreamingTalkingMessageEvent,
   UserTalkingMessageEvent,
-  TaskMode,
-  TaskType,
 } from "@heygen/streaming-avatar";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 
 import { NarrationMode } from "./narrationMode";
 
@@ -15,6 +13,7 @@ export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
   CONNECTING = "connecting",
   CONNECTED = "connected",
+  DISCONNECTING = "disconnecting",
 }
 
 export enum MessageSender {
@@ -46,13 +45,10 @@ type StreamingAvatarContextProps = {
   setSessionState: (sessionState: StreamingAvatarSessionState) => void;
   stream: MediaStream | null;
   setStream: (stream: MediaStream | null) => void;
+  sessionId: string | null;
+  setSessionId: (sessionId: string | null) => void;
 
   messages: Message[];
-  latestWebhookMessage: {
-    id: string;
-    message: string;
-    botId: string | null;
-  } | null;
   clearMessages: () => void;
   handleUserTalkingMessage: ({
     detail,
@@ -65,11 +61,6 @@ type StreamingAvatarContextProps = {
     detail: StreamingTalkingMessageEvent;
   }) => void;
   handleEndMessage: () => void;
-  injectWebhookMessage: (payload: {
-    id?: string;
-    message: string;
-    botId?: string | null;
-  }) => void;
 
   isListening: boolean;
   setIsListening: (isListening: boolean) => void;
@@ -96,13 +87,13 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     setIsVoiceChatActive: () => {},
     stream: null,
     setStream: () => {},
+    sessionId: null,
+    setSessionId: () => {},
     messages: [],
-    latestWebhookMessage: null,
     clearMessages: () => {},
     handleUserTalkingMessage: () => {},
     handleStreamingTalkingMessage: () => {},
     handleEndMessage: () => {},
-    injectWebhookMessage: () => {},
     isListening: false,
     setIsListening: () => {},
     isUserTalking: false,
@@ -119,12 +110,15 @@ const useStreamingAvatarSessionState = () => {
     StreamingAvatarSessionState.INACTIVE,
   );
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   return {
     sessionState,
     setSessionState,
     stream,
     setStream,
+    sessionId,
+    setSessionId,
   };
 };
 
@@ -145,13 +139,7 @@ const useStreamingAvatarVoiceChatState = () => {
 
 const useStreamingAvatarMessageState = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [latestWebhookMessage, setLatestWebhookMessage] = useState<{
-    id: string;
-    message: string;
-    botId: string | null;
-  } | null>(null);
   const currentSenderRef = useRef<MessageSender | null>(null);
-  const processedWebhookIdsRef = useRef(new Set<string>());
 
   const handleUserTalkingMessage = useCallback(
     ({ detail }: { detail: UserTalkingMessageEvent }) => {
@@ -207,63 +195,15 @@ const useStreamingAvatarMessageState = () => {
     currentSenderRef.current = null;
   }, []);
 
-  const injectWebhookMessage = useCallback(
-    ({
-      id,
-      message,
-      botId,
-    }: {
-      id?: string;
-      message: string;
-      botId?: string | null;
-    }) => {
-      const trimmedMessage = message.trim();
-
-      if (!trimmedMessage) {
-        return;
-      }
-
-      const messageId = id ?? crypto.randomUUID?.() ?? Date.now().toString();
-
-      if (processedWebhookIdsRef.current.has(messageId)) {
-        return;
-      }
-
-      processedWebhookIdsRef.current.add(messageId);
-      currentSenderRef.current = null;
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: messageId,
-          sender: MessageSender.WEBHOOK,
-          content: trimmedMessage,
-          botId: botId ?? null,
-        },
-      ]);
-
-      setLatestWebhookMessage({
-        id: messageId,
-        message: trimmedMessage,
-        botId: botId ?? null,
-      });
-    },
-    [],
-  );
-
   return {
     messages,
-    latestWebhookMessage,
     clearMessages: useCallback(() => {
       setMessages([]);
       currentSenderRef.current = null;
-      processedWebhookIdsRef.current.clear();
-      setLatestWebhookMessage(null);
     }, []),
     handleUserTalkingMessage,
     handleStreamingTalkingMessage,
     handleEndMessage,
-    injectWebhookMessage,
   };
 };
 
@@ -305,148 +245,10 @@ export const StreamingAvatarProvider = ({
   const avatarRef = React.useRef<StreamingAvatar>(null);
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
-  const { injectWebhookMessage, ...messageState } =
-    useStreamingAvatarMessageState();
+  const messageState = useStreamingAvatarMessageState();
   const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
-  const currentSessionState = sessionState.sessionState;
-  const latestWebhookMessage = messageState.latestWebhookMessage;
-  const webhookSpeechQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const lastSpokenWebhookIdRef = useRef<string | null>(null);
-  const { setIsVoiceChatActive, setIsVoiceChatLoading, setIsMuted } =
-    voiceChatState;
-  const { setIsListening } = listeningState;
-  const { setIsUserTalking, setIsAvatarTalking } = talkingState;
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const streamUrl = "/api/webhook/stream";
-    const eventSource = new EventSource(streamUrl);
-
-    const handleEvent = (event: MessageEvent<string>) => {
-      try {
-        const data = JSON.parse(event.data) as {
-          id?: string;
-          message?: string;
-          botId?: string | null;
-        };
-
-        if (typeof data.message !== "string") {
-          return;
-        }
-
-        injectWebhookMessage({
-          id: data.id,
-          message: data.message,
-          botId: data.botId ?? null,
-        });
-      } catch (error) {
-        console.error("Failed to parse webhook message", error);
-      }
-    };
-
-    eventSource.addEventListener("webhook-message", handleEvent);
-    eventSource.onerror = (error) => {
-      console.error("Webhook stream connection error", error);
-    };
-
-    return () => {
-      eventSource.removeEventListener("webhook-message", handleEvent);
-      eventSource.close();
-    };
-  }, [injectWebhookMessage]);
-
-  useEffect(() => {
-    if (currentSessionState === StreamingAvatarSessionState.INACTIVE) {
-      lastSpokenWebhookIdRef.current = null;
-      webhookSpeechQueueRef.current = Promise.resolve();
-    }
-  }, [currentSessionState]);
-
-  useEffect(() => {
-    if (narrationMode !== NarrationMode.WEBHOOK) {
-      lastSpokenWebhookIdRef.current = null;
-      webhookSpeechQueueRef.current = Promise.resolve();
-    }
-  }, [narrationMode]);
-
-  useEffect(() => {
-    if (narrationMode !== NarrationMode.WEBHOOK) {
-      return;
-    }
-
-    setIsVoiceChatActive(false);
-    setIsVoiceChatLoading(false);
-    setIsMuted(true);
-    setIsListening(false);
-    setIsUserTalking(false);
-    setIsAvatarTalking(false);
-
-    const tearDownRealtimePipelines = async () => {
-      try {
-        await avatarRef.current?.closeVoiceChat();
-      } catch (error) {
-        console.warn("Failed to close voice chat in webhook mode", error);
-      }
-
-      try {
-        await avatarRef.current?.stopListening();
-      } catch (error) {
-        console.warn("Failed to stop listening in webhook mode", error);
-      }
-    };
-
-    void tearDownRealtimePipelines();
-  }, [
-    narrationMode,
-    setIsAvatarTalking,
-    setIsListening,
-    setIsMuted,
-    setIsUserTalking,
-    setIsVoiceChatActive,
-    setIsVoiceChatLoading,
-    avatarRef,
-  ]);
-
-  useEffect(() => {
-    if (
-      narrationMode !== NarrationMode.WEBHOOK ||
-      currentSessionState !== StreamingAvatarSessionState.CONNECTED ||
-      !latestWebhookMessage ||
-      !latestWebhookMessage.message.trim() ||
-      !avatarRef.current
-    ) {
-      return;
-    }
-
-    if (lastSpokenWebhookIdRef.current === latestWebhookMessage.id) {
-      return;
-    }
-
-    lastSpokenWebhookIdRef.current = latestWebhookMessage.id;
-
-    const speakWebhookMessage = async () => {
-      try {
-        await avatarRef.current?.speak({
-          text: latestWebhookMessage.message,
-          // `repeat` mode bypasses the knowledge base and reads the payload verbatim.
-          taskType: TaskType.REPEAT,
-          task_type: TaskType.REPEAT,
-          taskMode: TaskMode.SYNC,
-        });
-      } catch (error) {
-        console.error("Failed to speak webhook message", error);
-      }
-    };
-
-    webhookSpeechQueueRef.current = webhookSpeechQueueRef.current
-      .catch(() => undefined)
-      .then(speakWebhookMessage);
-  }, [avatarRef, currentSessionState, latestWebhookMessage, narrationMode]);
 
   return (
     <StreamingAvatarContext.Provider
@@ -457,7 +259,6 @@ export const StreamingAvatarProvider = ({
         ...voiceChatState,
         ...sessionState,
         ...messageState,
-        injectWebhookMessage,
         ...listeningState,
         ...talkingState,
         ...connectionQualityState,
