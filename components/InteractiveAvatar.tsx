@@ -114,6 +114,7 @@ function InteractiveAvatar({
 	const latestStartRequestIdRef = useRef(0);
 	const [sessionError, setSessionError] = useState<string | null>(null);
 	const [voiceChatWarning, setVoiceChatWarning] = useState<string | null>(null);
+	const isInitializing = useRef(false);
 
 	const sanitizedSystemPrompt = useMemo(
 		() => systemPrompt?.trim() || undefined,
@@ -178,6 +179,7 @@ function InteractiveAvatar({
 		try {
 			setSessionError(null);
 			setVoiceChatWarning(null);
+			isInitializing.current = true;
 
 			const tokenPromise = fetchAccessToken();
 
@@ -286,6 +288,7 @@ function InteractiveAvatar({
 			}
 
 			hasStarted.current = false;
+			isInitializing.current = false;
 			const message = getErrorMessage(error);
 
 			setSessionError(message);
@@ -435,8 +438,17 @@ function InteractiveAvatar({
 			mediaStream.current.onloadedmetadata = () => {
 				mediaStream.current!.play();
 			};
+			// Mark initialization as complete when stream is ready
+			isInitializing.current = false;
 		}
 	}, [mediaStream, stream]);
+
+	// Reset initialization flag when session state changes to CONNECTED
+	useEffect(() => {
+		if (sessionState === StreamingAvatarSessionState.CONNECTED) {
+			isInitializing.current = false;
+		}
+	}, [sessionState]);
 
 	return (
 		<div className="relative h-full w-full">
@@ -471,7 +483,14 @@ function InteractiveAvatar({
 							<span className="text-sm text-zinc-300">Disconnecting…</span>
 						</>
 					) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
-						<span className="text-sm text-zinc-300">Session closed</span>
+						isInitializing.current ? (
+							<>
+								<LoadingIcon className="animate-spin" />
+								<span className="text-sm text-zinc-300">connecting agent…</span>
+							</>
+						) : (
+							<span className="text-sm text-zinc-300">Disconnected</span>
+						)
 					) : null}
 				</div>
 			) : null}
