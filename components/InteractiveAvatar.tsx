@@ -79,6 +79,7 @@ const createDefaultConfig = ({
 	sttSettings: {
 		provider: STTProvider.DEEPGRAM,
 	},
+	activityIdleTimeout: 300, // 5 minutes in seconds
 });
 
 type InteractiveAvatarProps = {
