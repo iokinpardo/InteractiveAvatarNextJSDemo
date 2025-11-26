@@ -23,6 +23,8 @@ export const useStreamingAvatarSession = () => {
     setStream,
     sessionId,
     setSessionId,
+    customSessionId,
+    setCustomSessionId,
     setIsListening,
     setIsUserTalking,
     setIsAvatarTalking,
@@ -138,6 +140,7 @@ export const useStreamingAvatarSession = () => {
     setIsAvatarTalking(false);
     setStream(null);
     setSessionId(null);
+    setCustomSessionId(null); // Clear custom session ID
     await avatarRef.current?.stopAvatar();
     setSessionState(StreamingAvatarSessionState.INACTIVE);
   }, [
@@ -150,12 +153,44 @@ export const useStreamingAvatarSession = () => {
     setIsAvatarTalking,
     setStream,
     setSessionId,
+    setCustomSessionId,
     setSessionState,
   ]);
 
-  const handleStreamDisconnected = useCallback(() => {
-    stop();
-  }, [stop]);
+  const closeSession = useCallback(
+    async (sessionIdToClose: string) => {
+      try {
+        const response = await fetch("/api/avatar/close-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ sessionId: sessionIdToClose }),
+        });
+
+        if (!response.ok) {
+          console.error("Failed to close session via API");
+        }
+      } catch (error) {
+        console.error("Error closing session via API:", error);
+      } finally {
+        // Always stop the local session state regardless of API call result
+        await stop();
+      }
+    },
+    [stop],
+  );
+
+  const handleStreamDisconnected = useCallback(async () => {
+    // If there's a customSessionId, close the session properly via API
+    // This ensures the HeyGen session is closed and the mapping is unregistered
+    if (customSessionId) {
+      await closeSession(customSessionId);
+    } else {
+      // No customSessionId, just clean up local state
+      await stop();
+    }
+  }, [customSessionId, closeSession, stop]);
 
   // Detect when stream is disconnected externally (e.g., via API call)
   useEffect(() => {
@@ -315,30 +350,6 @@ export const useStreamingAvatarSession = () => {
       setSessionState,
       setSessionId,
     ],
-  );
-
-  const closeSession = useCallback(
-    async (sessionIdToClose: string) => {
-      try {
-        const response = await fetch("/api/avatar/close-session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ sessionId: sessionIdToClose }),
-        });
-
-        if (!response.ok) {
-          console.error("Failed to close session via API");
-        }
-      } catch (error) {
-        console.error("Error closing session via API:", error);
-      } finally {
-        // Always stop the local session state regardless of API call result
-        await stop();
-      }
-    },
-    [stop],
   );
 
   // Detect when session is in CONNECTING state for too long (timeout)

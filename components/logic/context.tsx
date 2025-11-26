@@ -47,6 +47,8 @@ type StreamingAvatarContextProps = {
   setStream: (stream: MediaStream | null) => void;
   sessionId: string | null;
   setSessionId: (sessionId: string | null) => void;
+  customSessionId: string | null;
+  setCustomSessionId: (customSessionId: string | null) => void;
 
   messages: Message[];
   clearMessages: () => void;
@@ -89,6 +91,8 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     setStream: () => {},
     sessionId: null,
     setSessionId: () => {},
+    customSessionId: null,
+    setCustomSessionId: () => {},
     messages: [],
     clearMessages: () => {},
     handleUserTalkingMessage: () => {},
@@ -111,6 +115,7 @@ const useStreamingAvatarSessionState = () => {
   );
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [customSessionId, setCustomSessionId] = useState<string | null>(null);
 
   return {
     sessionState,
@@ -119,6 +124,8 @@ const useStreamingAvatarSessionState = () => {
     setStream,
     sessionId,
     setSessionId,
+    customSessionId,
+    setCustomSessionId,
   };
 };
 

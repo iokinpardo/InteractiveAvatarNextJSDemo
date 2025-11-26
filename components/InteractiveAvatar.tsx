@@ -18,6 +18,7 @@ import {
 	NarrationMode,
 	StreamingAvatarProvider,
 	StreamingAvatarSessionState,
+	useStreamingAvatarContext,
 } from "./logic";
 import { LoadingIcon } from "./Icons";
 import { useVoiceChat } from "./logic/useVoiceChat";
@@ -103,10 +104,12 @@ function InteractiveAvatar({
 		initAvatar,
 		startAvatar,
 		stopAvatar,
+		closeSession,
 		sessionState,
 		stream,
 		sessionId: heygenSessionId,
 	} = useStreamingAvatarSession();
+	const { setCustomSessionId } = useStreamingAvatarContext();
 	const { startVoiceChat } = useVoiceChat();
 
 	const mediaStream = useRef<HTMLVideoElement>(null);
@@ -341,6 +344,14 @@ function InteractiveAvatar({
 		}
 	}, [narrationMode, systemPrompt]);
 
+	// Set customSessionId in context when available
+	useEffect(() => {
+		setCustomSessionId(customSessionId ?? null);
+		return () => {
+			setCustomSessionId(null);
+		};
+	}, [customSessionId, setCustomSessionId]);
+
 	// Register session mapping when both customSessionId and heygenSessionId are available
 	useEffect(() => {
 		if (
@@ -428,8 +439,75 @@ function InteractiveAvatar({
 		};
 	}, [customSessionId, heygenSessionId, sessionState]);
 
+	// Handle window close cleanup
+	useEffect(() => {
+		if (!customSessionId) {
+			return;
+		}
+
+		const cleanupSession = () => {
+			if (
+				customSessionId &&
+				sessionState === StreamingAvatarSessionState.CONNECTED
+			) {
+				// Use sendBeacon for reliable delivery during page unload
+				// sendBeacon doesn't support custom headers, so we'll use FormData or URLSearchParams
+				// However, our API expects JSON, so we'll use fetch with keepalive as fallback
+				const data = JSON.stringify({ sessionId: customSessionId });
+				
+				// Try sendBeacon first (works with FormData or Blob)
+				const blob = new Blob([data], { type: "application/json" });
+				const sent = navigator.sendBeacon(
+					"/api/avatar/close-session",
+					blob,
+				);
+				
+				// If sendBeacon failed, try fetch with keepalive
+				if (!sent) {
+					fetch("/api/avatar/close-session", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: data,
+						keepalive: true,
+					}).catch((error) => {
+						// Silently fail - we're in unload, can't do much
+						console.error("Error closing session on page unload:", error);
+					});
+				}
+			}
+		};
+
+		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+			cleanupSession();
+		};
+
+		const handlePageHide = (event: PageTransitionEvent) => {
+			// pagehide fires before beforeunload in some browsers
+			cleanupSession();
+		};
+
+		window.addEventListener("beforeunload", handleBeforeUnload);
+		window.addEventListener("pagehide", handlePageHide);
+
+		return () => {
+			window.removeEventListener("beforeunload", handleBeforeUnload);
+			window.removeEventListener("pagehide", handlePageHide);
+		};
+	}, [customSessionId, sessionState]);
+
 	useUnmount(() => {
-		stopAvatar();
+		// Also try to close session on component unmount if customSessionId exists
+		if (customSessionId && sessionState === StreamingAvatarSessionState.CONNECTED) {
+			closeSession(customSessionId).catch((error) => {
+				console.error("Error closing session on unmount:", error);
+				// Fallback to just stopping locally
+				stopAvatar();
+			});
+		} else {
+			stopAvatar();
+		}
 	});
 
 	useEffect(() => {
