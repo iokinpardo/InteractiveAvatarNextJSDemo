@@ -109,3 +109,47 @@ export async function hasSessionMapping(
 	const result = stmt.get(trimmed, now);
 	return !!result;
 }
+
+/**
+ * List all active (non-expired) session mappings
+ * Also cleans up expired mappings
+ */
+export async function listActiveMappings(): Promise<
+	Array<{
+		custom_session_id: string;
+		heygen_session_id: string;
+		created_at: number;
+		expires_at: number | null;
+	}>
+> {
+	const db = getDb();
+
+	// Clean up expired mappings first
+	const now = Math.floor(Date.now() / 1000);
+	const deleteStmt = db.prepare(`
+    DELETE FROM session_mappings 
+    WHERE expires_at IS NOT NULL AND expires_at < ?
+  `);
+	deleteStmt.run(now);
+
+	// Get all active mappings
+	const stmt = db.prepare(`
+    SELECT 
+      custom_session_id,
+      heygen_session_id,
+      created_at,
+      expires_at
+    FROM session_mappings
+    WHERE expires_at IS NULL OR expires_at >= ?
+    ORDER BY created_at DESC
+  `);
+
+	const results = stmt.all(now) as Array<{
+		custom_session_id: string;
+		heygen_session_id: string;
+		created_at: number;
+		expires_at: number | null;
+	}>;
+
+	return results;
+}

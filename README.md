@@ -115,6 +115,78 @@ This Next.js 15 sample bootstraps a live HeyGen streaming avatar, mints access t
 
 Public avatar IDs such as `Ann_Therapist_public`, `Shawn_Therapist_public`, `Bryan_FitnessCoach_public`, `Dexter_Doctor_Standing2_public`, and `Elenora_IT_Sitting_public` are included for quick testing, and you can substitute any custom ID you own.
 
+## Session management
+
+The application supports custom session IDs for tracking and managing avatar sessions across multiple clients or browser tabs.
+
+### Custom session IDs
+
+- **URL parameter:** `sessionId` – A custom identifier for the session that is mapped to HeyGen's internal session ID.
+- **Purpose:** Allows external systems to reference and manage sessions using meaningful identifiers instead of HeyGen's generated session IDs.
+- **Usage example:**
+
+  ```text
+  https://your-demo-host?sessionId=user-123-meeting-456
+  ```
+
+### Session mapping behavior
+
+When a session is started with a `customSessionId`:
+
+1. **Session registration:** Once the session connects, the application automatically registers a mapping between the `customSessionId` and HeyGen's `heygenSessionId` in a local database.
+2. **Mapping storage:** Mappings are stored with a default TTL of 1 hour (3600 seconds) and are automatically cleaned up when expired.
+3. **Idempotent registration:** If the same `customSessionId` and `heygenSessionId` combination is registered again, the operation is idempotent and returns success.
+
+### Handling duplicate session IDs
+
+When a new session is started with a `customSessionId` that is already mapped to a different `heygenSessionId`:
+
+1. **Automatic cleanup:** The system automatically attempts to close the previous HeyGen session via the API.
+2. **Mapping replacement:** The old mapping is unregistered from the database, and the new mapping is registered.
+3. **No client notification:** The previous client (browser tab/window) that had the session is **not automatically notified**. The old session will be disconnected when:
+   - The stream detects the session was closed (via stream state monitoring)
+   - The client attempts to interact with the session and discovers it's no longer valid
+   - The session times out due to inactivity
+
+**Important considerations:**
+
+- **Race conditions:** If two clients attempt to start sessions with the same `customSessionId` simultaneously, the last one to register will replace the previous mapping.
+- **Client state:** The previous client may continue to show a connected state until it detects the stream has been closed.
+- **Best practice:** Use unique `customSessionId` values per active session, or implement client-side logic to handle session displacement gracefully.
+
+### Session timeout handling
+
+- **Activity timeout:** Sessions have an `activityIdleTimeout` of 5 minutes (300 seconds). If no activity occurs, HeyGen will automatically close the session.
+- **Automatic cleanup:** When a session times out:
+  - The stream disconnection is detected by the client
+  - The application automatically calls the close session API to clean up the HeyGen session
+  - The session mapping is unregistered from the database
+  - Local session state is reset
+
+### Window close cleanup
+
+When a browser window or tab is closed:
+
+- **Automatic cleanup:** The application attempts to close the session via the API using `navigator.sendBeacon()` or `fetch()` with `keepalive: true` to ensure the request completes even during page unload.
+- **Fallback:** If the API call fails (e.g., network issues), the session mapping will expire after the TTL (1 hour) and be cleaned up automatically.
+- **Component unmount:** When the React component unmounts, it also attempts to close the session if a `customSessionId` is present.
+
+### Session lifecycle
+
+1. **Start:** Session is initiated with optional `customSessionId` from URL parameter
+2. **Connect:** Once connected, mapping is registered if `customSessionId` is provided
+3. **Active:** Session remains active until:
+   - User closes the window/tab
+   - Session times out due to inactivity (5 minutes)
+   - Stream is disconnected externally
+   - New session replaces it with the same `customSessionId`
+4. **Cleanup:** On disconnect, the session is closed via API and mapping is unregistered
+
+### API endpoints
+
+- **`POST /api/avatar/register-session`** – Registers a mapping between `customSessionId` and `heygenSessionId`
+- **`POST /api/avatar/close-session`** – Closes a session by `customSessionId` (translates to `heygenSessionId` internally)
+
 ## Project structure
 
 - `app/` – Route handlers (`page.tsx`), the streaming token API route, and global layout/font configuration.

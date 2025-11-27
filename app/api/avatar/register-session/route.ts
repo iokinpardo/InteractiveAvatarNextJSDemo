@@ -3,7 +3,10 @@ import {
   registerSessionMapping,
   hasSessionMapping,
   getHeyGenSessionId,
+  unregisterSessionMapping,
 } from "@/app/lib/sessionMapping";
+
+const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,16 +85,57 @@ export async function POST(request: Request) {
           { status: 200 },
         );
       } else {
-        // Different mapping - this is an error
-        return NextResponse.json(
-          {
-            error: "Session mapping already exists with a different HeyGen session ID",
-            customSessionId: trimmedCustomId,
-            existingHeyGenId,
-            requestedHeyGenId: trimmedHeyGenId,
-          },
-          { status: 409 },
+        // Different mapping - close the old session before registering the new one
+        console.log(
+          `Session mapping exists with different HeyGen ID. Closing old session: ${existingHeyGenId}`,
         );
+
+        if (HEYGEN_API_KEY) {
+          try {
+            const baseApiUrl =
+              process.env.NEXT_PUBLIC_BASE_API_URL || "https://api.heygen.com";
+            const url = `${baseApiUrl}/v1/streaming.stop`;
+
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {
+                "x-api-key": HEYGEN_API_KEY,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ session_id: existingHeyGenId }),
+            });
+
+            if (response.ok) {
+              console.log(
+                `Successfully closed old HeyGen session: ${existingHeyGenId}`,
+              );
+            } else {
+              const errorText = await response.text();
+              console.warn(
+                `Failed to close old HeyGen session ${existingHeyGenId}:`,
+                response.status,
+                errorText,
+              );
+            }
+          } catch (error) {
+            console.error(
+              `Error closing old HeyGen session ${existingHeyGenId}:`,
+              error,
+            );
+          }
+        } else {
+          console.warn(
+            "HEYGEN_API_KEY not available, cannot close old session",
+          );
+        }
+
+        // Unregister the old mapping regardless of whether we successfully closed the session
+        // This allows the new mapping to be registered
+        await unregisterSessionMapping(trimmedCustomId);
+
+        // Continue with registering the new mapping
+        // Note: We proceed even if closing the old session failed, as the old session
+        // may have already been closed or may not exist anymore
       }
     }
 

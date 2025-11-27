@@ -3,6 +3,7 @@ export { useVoiceChat } from "./useVoiceChat";
 export { useConnectionQuality } from "./useConnectionQuality";
 export { useMessageHistory } from "./useMessageHistory";
 export { useInterrupt } from "./useInterrupt";
+export { useStreamingAvatarContext } from "./context";
 export {
   StreamingAvatarSessionState,
   StreamingAvatarProvider,
