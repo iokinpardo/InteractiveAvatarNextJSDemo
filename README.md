@@ -171,6 +171,28 @@ When a browser window or tab is closed:
 - **Fallback:** If the API call fails (e.g., network issues), the session mapping will expire after the TTL (1 hour) and be cleaned up automatically.
 - **Component unmount:** When the React component unmounts, it also attempts to close the session if a `customSessionId` is present.
 
+### Abandoned sessions and client failures
+
+When a session is abandoned or the client fails unexpectedly:
+
+- **Mapping persistence:** Session mappings remain in the database until they expire (default: 1 hour after registration), even if the client disconnects or crashes.
+- **Lazy cleanup:** Expired mappings are automatically removed when:
+  - A new session lookup occurs (`getHeyGenSessionId`)
+  - The mapping list is queried (`listActiveMappings`)
+  - Any database operation checks for active mappings
+- **No proactive cleanup:** There is no background job or scheduled task that automatically removes expired mappings. Cleanup only happens "on-demand" when the database is accessed.
+- **Orphaned mappings:** If a client crashes or loses network connectivity before cleanup can occur:
+  - The mapping will remain in the database until expiration (up to 1 hour)
+  - The HeyGen session may timeout independently (5 minutes of inactivity)
+  - A new session with the same `customSessionId` can replace the old mapping after the previous one expires or is manually cleaned up
+
+**Important considerations:**
+
+- **Mapping TTL:** The default TTL of 1 hour provides a safety window for reconnection, but also means abandoned sessions may block the `customSessionId` for up to 1 hour.
+- **HeyGen session timeout:** HeyGen sessions timeout after 5 minutes of inactivity, but the mapping in the database persists longer (1 hour by default).
+- **Race conditions:** If a client reconnects within the TTL window, it may find an expired mapping that hasn't been cleaned up yet, potentially causing conflicts.
+- **Best practice:** For production use, consider implementing a background cleanup job or reducing the TTL if faster cleanup is required.
+
 ### Session lifecycle
 
 1. **Start:** Session is initiated with optional `customSessionId` from URL parameter
@@ -255,7 +277,7 @@ Inside `createDefaultConfig`, the selected ID is applied to the `avatarName` fie
 
 To change the avatar for your Recall configuration you can update the URL to something like:
 
-```
+```text
 https://interactiveavatarnextjsdemo-rfuq.onrender.com?avatarId=Shawn_Therapist_public
 ```
 
