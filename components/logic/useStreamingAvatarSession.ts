@@ -306,8 +306,21 @@ export const useStreamingAvatarSession = () => {
 
   const start = useCallback(
     async (config: StartAvatarRequest, token?: string) => {
-      if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
+      // Check session state - allow starting if INACTIVE or DISCONNECTING
+      // DISCONNECTING is allowed because it means stopAvatar was called and
+      // the session is being cleaned up. By the time we get here, it should
+      // have transitioned to INACTIVE, but we allow it to handle race conditions.
+      if (
+        sessionState !== StreamingAvatarSessionState.INACTIVE &&
+        sessionState !== StreamingAvatarSessionState.DISCONNECTING
+      ) {
         throw new Error("There is already an active session");
+      }
+
+      // If state is DISCONNECTING, wait a bit more for it to become INACTIVE
+      // This handles the case where stopAvatar was just called
+      if (sessionState === StreamingAvatarSessionState.DISCONNECTING) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
       if (!avatarRef.current) {
