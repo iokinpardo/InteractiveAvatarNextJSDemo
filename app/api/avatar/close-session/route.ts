@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { sessionEventEmitter } from "@/app/lib/sessionEventEmitter";
 import {
   getHeyGenSessionId,
   unregisterSessionMapping,
@@ -108,6 +110,12 @@ export async function POST(request: Request) {
 
     // Unregister the mapping after successful closure
     await unregisterSessionMapping(sessionId);
+
+    // Emit SSE event to notify connected clients
+    sessionEventEmitter.emit(sessionId.trim(), {
+      type: "session-close",
+      customSessionId: sessionId.trim(),
+    });
 
     const data = await response.json();
 

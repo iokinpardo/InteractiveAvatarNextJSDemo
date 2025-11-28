@@ -22,6 +22,8 @@ import {
 } from "./logic";
 import { LoadingIcon } from "./Icons";
 import { useVoiceChat } from "./logic/useVoiceChat";
+import { useSessionReconfiguration } from "./logic/useSessionReconfiguration";
+import type { SessionConfigUpdate } from "@/app/lib/sessionConfig";
 
 type CreateDefaultConfigArgs = {
 	systemPrompt?: string;
@@ -109,44 +111,124 @@ function InteractiveAvatar({
 		stream,
 		sessionId: heygenSessionId,
 	} = useStreamingAvatarSession();
-	const { setCustomSessionId } = useStreamingAvatarContext();
+	const {
+		customSessionId: contextCustomSessionId,
+		setCustomSessionId,
+		pendingConfigUpdate,
+		setPendingConfigUpdate,
+		isExplicitlyClosed,
+	} = useStreamingAvatarContext();
 	const { startVoiceChat } = useVoiceChat();
+
+	// Subscribe to session reconfiguration events
+	useSessionReconfiguration();
 
 	const mediaStream = useRef<HTMLVideoElement>(null);
 	const hasStarted = useRef(false);
 	const latestStartRequestIdRef = useRef(0);
+	const isStartingRef = useRef(false);
 	const [sessionError, setSessionError] = useState<string | null>(null);
 	const [voiceChatWarning, setVoiceChatWarning] = useState<string | null>(null);
 	const isInitializing = useRef(false);
 
+	// Merge pending config with props (pending config takes precedence)
+	const effectiveConfig = useMemo(() => {
+		if (!pendingConfigUpdate) {
+			return {
+				avatarId: avatarId?.trim() || undefined,
+				systemPrompt: systemPrompt?.trim() || undefined,
+				voiceOverrides: sanitizeVoiceOverrides(voiceOverrides),
+				narrationMode,
+			};
+		}
+
+		// Merge pending config with props
+		const merged: {
+			avatarId?: string;
+			systemPrompt?: string;
+			voiceOverrides?: VoiceOverrides;
+			narrationMode: NarrationMode;
+		} = {
+			avatarId:
+				pendingConfigUpdate.avatarId?.trim() ||
+				avatarId?.trim() ||
+				undefined,
+			systemPrompt:
+				pendingConfigUpdate.systemPrompt?.trim() ||
+				systemPrompt?.trim() ||
+				undefined,
+			narrationMode:
+				pendingConfigUpdate.narrationMode === "conversational"
+					? NarrationMode.CONVERSATIONAL
+					: pendingConfigUpdate.narrationMode === "webhook"
+						? NarrationMode.WEBHOOK
+						: narrationMode,
+		};
+
+		// Merge voice overrides
+		const pendingVoiceOverrides = pendingConfigUpdate.voiceOverrides;
+		const propsVoiceOverrides = sanitizeVoiceOverrides(voiceOverrides);
+		if (pendingVoiceOverrides || propsVoiceOverrides) {
+			merged.voiceOverrides = {
+				...(propsVoiceOverrides ?? {}),
+				...(pendingVoiceOverrides
+					? {
+							...(pendingVoiceOverrides.voiceId
+								? { voiceId: pendingVoiceOverrides.voiceId.trim() }
+								: {}),
+							...(pendingVoiceOverrides.emotion
+								? {
+										emotion: pendingVoiceOverrides.emotion as VoiceEmotion,
+									}
+								: {}),
+							...(pendingVoiceOverrides.model
+								? {
+										model: pendingVoiceOverrides.model as ElevenLabsModel,
+									}
+								: {}),
+						}
+					: {}),
+			};
+		}
+
+		return merged;
+	}, [pendingConfigUpdate, avatarId, systemPrompt, voiceOverrides, narrationMode]);
+
 	const sanitizedSystemPrompt = useMemo(
-		() => systemPrompt?.trim() || undefined,
-		[systemPrompt],
+		() => effectiveConfig.systemPrompt,
+		[effectiveConfig.systemPrompt],
 	);
 	const sanitizedAvatarId = useMemo(
-		() => avatarId?.trim() || undefined,
-		[avatarId],
+		() => effectiveConfig.avatarId,
+		[effectiveConfig.avatarId],
 	);
 	const sanitizedVoiceOverrides = useMemo(
-		() => sanitizeVoiceOverrides(voiceOverrides),
-		[voiceOverrides],
+		() => effectiveConfig.voiceOverrides,
+		[effectiveConfig.voiceOverrides],
 	);
+	const effectiveNarrationMode = useMemo(
+		() => effectiveConfig.narrationMode,
+		[effectiveConfig.narrationMode],
+	);
+
 	const sessionInputsSignature = useMemo(
 		() =>
 			JSON.stringify({
 				avatarId: sanitizedAvatarId ?? null,
 				systemPrompt:
-					narrationMode === NarrationMode.CONVERSATIONAL
+					effectiveNarrationMode === NarrationMode.CONVERSATIONAL
 						? (sanitizedSystemPrompt ?? null)
 						: null,
 				voiceOverrides: sanitizedVoiceOverrides ?? null,
-				narrationMode,
+				narrationMode: effectiveNarrationMode,
+				hasPendingConfig: !!pendingConfigUpdate,
 			}),
 		[
-			narrationMode,
+			effectiveNarrationMode,
 			sanitizedAvatarId,
 			sanitizedSystemPrompt,
 			sanitizedVoiceOverrides,
+			pendingConfigUpdate,
 		],
 	);
 
@@ -184,11 +266,26 @@ function InteractiveAvatar({
 			setVoiceChatWarning(null);
 			isInitializing.current = true;
 
-			const tokenPromise = fetchAccessToken();
-
+			// If there's an active session, stop it first and wait for it to become inactive
 			if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
+				console.log(
+					"Stopping active session before starting new one. Current state:",
+					sessionState,
+				);
 				await stopAvatar();
+				
+				// Wait a reasonable time for stopAvatar to complete and state to update
+				// stopAvatar sets state to DISCONNECTING, then INACTIVE
+				// We wait enough time for React to process the state updates
+				await new Promise((resolve) => setTimeout(resolve, 500));
+
+				// Check if this request is still valid
+				if (latestStartRequestIdRef.current !== requestId) {
+					return;
+				}
 			}
+
+			const tokenPromise = fetchAccessToken();
 
 			if (latestStartRequestIdRef.current !== requestId) {
 				return;
@@ -230,16 +327,27 @@ function InteractiveAvatar({
 
 			const startConfig = createDefaultConfig({
 				systemPrompt:
-					narrationMode === NarrationMode.CONVERSATIONAL
+					effectiveNarrationMode === NarrationMode.CONVERSATIONAL
 						? sanitizedSystemPrompt
 						: undefined,
 				avatarId: sanitizedAvatarId,
 				voiceOverrides: sanitizedVoiceOverrides,
 			});
 
+			// Apply additional config from pending update if available
+			if (pendingConfigUpdate) {
+				if (pendingConfigUpdate.quality) {
+					startConfig.quality = pendingConfigUpdate.quality as AvatarQuality;
+				}
+				if (pendingConfigUpdate.language) {
+					startConfig.language = pendingConfigUpdate.language;
+				}
+				// Add other StartAvatarRequest fields as needed
+			}
+
 			if (
 				sanitizedSystemPrompt &&
-				narrationMode === NarrationMode.CONVERSATIONAL
+				effectiveNarrationMode === NarrationMode.CONVERSATIONAL
 			) {
 				console.log(
 					"Applying system prompt as knowledgeBase",
@@ -255,6 +363,12 @@ function InteractiveAvatar({
 				console.log("Applying voice overrides", sanitizedVoiceOverrides);
 			}
 
+			if (pendingConfigUpdate) {
+				console.log("Using pending configuration update", pendingConfigUpdate);
+				// Clear pending config after using it
+				setPendingConfigUpdate(null);
+			}
+
 			if (latestStartRequestIdRef.current !== requestId) {
 				return;
 			}
@@ -265,7 +379,7 @@ function InteractiveAvatar({
 				return;
 			}
 
-			if (narrationMode === NarrationMode.CONVERSATIONAL) {
+			if (effectiveNarrationMode === NarrationMode.CONVERSATIONAL) {
 				try {
 					await startVoiceChat();
 					if (latestStartRequestIdRef.current !== requestId) {
@@ -292,6 +406,7 @@ function InteractiveAvatar({
 
 			hasStarted.current = false;
 			isInitializing.current = false;
+			isStartingRef.current = false; // Reset flag on error
 			const message = getErrorMessage(error);
 
 			setSessionError(message);
@@ -309,7 +424,7 @@ function InteractiveAvatar({
 	});
 
 	const handleRetryVoiceChat = useMemoizedFn(async () => {
-		if (narrationMode !== NarrationMode.CONVERSATIONAL) {
+		if (effectiveNarrationMode !== NarrationMode.CONVERSATIONAL) {
 			return;
 		}
 
@@ -329,27 +444,70 @@ function InteractiveAvatar({
 	});
 
 	useEffect(() => {
-		if (!hasStarted.current) {
-			hasStarted.current = true;
+		// Prevent starting if session is already connecting or connected
+		// This prevents race conditions when pending config triggers startSession
+		// while the initial session is still starting
+		if (
+			sessionState === StreamingAvatarSessionState.CONNECTING ||
+			sessionState === StreamingAvatarSessionState.CONNECTED
+		) {
+			// Session is already active or starting, reset flag
+			isStartingRef.current = false;
+			return;
 		}
 
-		startSession();
-	}, [sessionInputsSignature, startSession]);
+		// Only auto-start if:
+		// 1. There's a customSessionId in props
+		// 2. Session state is INACTIVE (no active session)
+		// 3. Not explicitly closed (prevents restart after close or timeout)
+		// 4. Not already starting (prevents double start from React Strict Mode or race conditions)
+		if (!customSessionId) {
+			return;
+		}
+
+		if (isExplicitlyClosed) {
+			// Session was explicitly closed or timed out, don't auto-restart
+			return;
+		}
+
+		// Prevent multiple simultaneous starts (e.g., from React Strict Mode double mounting)
+		if (isStartingRef.current) {
+			console.log("Session start already in progress, skipping duplicate start");
+			return;
+		}
+
+		isStartingRef.current = true;
+		startSession()
+			.catch((error) => {
+				// Error is already handled in startSession, just reset flag
+				console.error("Error in startSession from useEffect:", error);
+			})
+			.finally(() => {
+				// Reset flag after start completes (success or failure)
+				// Use setTimeout to ensure state has updated
+				setTimeout(() => {
+					isStartingRef.current = false;
+				}, 100);
+			});
+	}, [sessionInputsSignature, startSession, sessionState, customSessionId, isExplicitlyClosed]);
 
 	useEffect(() => {
-		if (narrationMode === NarrationMode.WEBHOOK && systemPrompt?.trim()) {
+		if (
+			effectiveNarrationMode === NarrationMode.WEBHOOK &&
+			sanitizedSystemPrompt
+		) {
 			console.info(
 				"System prompts are ignored in webhook narration mode. Webhook messages fully control narration.",
 			);
 		}
-	}, [narrationMode, systemPrompt]);
+	}, [effectiveNarrationMode, sanitizedSystemPrompt]);
 
-	// Set customSessionId in context when available
+	// Set customSessionId in context when available from props
+	// This ensures the context has the sessionId for SSE subscription and other operations
 	useEffect(() => {
-		setCustomSessionId(customSessionId ?? null);
-		return () => {
-			setCustomSessionId(null);
-		};
+		if (customSessionId) {
+			setCustomSessionId(customSessionId);
+		}
 	}, [customSessionId, setCustomSessionId]);
 
 	// Register session mapping when both customSessionId and heygenSessionId are available
@@ -508,6 +666,10 @@ function InteractiveAvatar({
 		} else {
 			stopAvatar();
 		}
+		// Clear customSessionId on unmount for cleanup
+		if (customSessionId) {
+			setCustomSessionId(null);
+		}
 	});
 
 	useEffect(() => {
@@ -572,7 +734,7 @@ function InteractiveAvatar({
 					) : null}
 				</div>
 			) : null}
-			{narrationMode === NarrationMode.WEBHOOK ? (
+			{effectiveNarrationMode === NarrationMode.WEBHOOK ? (
 				<div className="absolute bottom-0 left-0 w-full box-border p-3 flex justify-center items-center">
 					<div className="rounded-md border border-slate-800 bg-slate-800 px-2 py-1 text-sm text-slate-300">
 						<p className="text-left">
@@ -582,7 +744,7 @@ function InteractiveAvatar({
 					</div>
 				</div>
 			) : null}
-			{narrationMode === NarrationMode.CONVERSATIONAL && voiceChatWarning ? (
+			{effectiveNarrationMode === NarrationMode.CONVERSATIONAL && voiceChatWarning ? (
 				<div className="absolute bottom-0 left-0 w-full box-border p-3 flex justify-center items-center">
 					<div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
 						<p className="mb-3 text-left">{voiceChatWarning}</p>

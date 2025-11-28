@@ -143,7 +143,7 @@ When a new session is started with a `customSessionId` that is already mapped to
 
 1. **Automatic cleanup:** The system automatically attempts to close the previous HeyGen session via the API.
 2. **Mapping replacement:** The old mapping is unregistered from the database, and the new mapping is registered.
-3. **No client notification:** The previous client (browser tab/window) that had the session is **not automatically notified**. The old session will be disconnected when:
+3. **Client notification:** The previous client (browser tab/window) that had the session is notified via Server-Sent Events (SSE) `session-close` event, which prevents the session from auto-restarting. The old session will also be disconnected when:
    - The stream detects the session was closed (via stream state monitoring)
    - The client attempts to interact with the session and discovers it's no longer valid
    - The session times out due to inactivity
@@ -159,9 +159,9 @@ When a new session is started with a `customSessionId` that is already mapped to
 - **Activity timeout:** Sessions have an `activityIdleTimeout` of 5 minutes (300 seconds). If no activity occurs, HeyGen will automatically close the session.
 - **Automatic cleanup:** When a session times out:
   - The stream disconnection is detected by the client
-  - The application automatically calls the close session API to clean up the HeyGen session
-  - The session mapping is unregistered from the database
+  - The client sets a flag to prevent auto-restart (prevents uncontrolled costs from abandoned sessions)
   - Local session state is reset
+  - **No automatic restart:** Sessions closed by timeout will not restart automatically. The user must reload the page to start a new session.
 
 ### Window close cleanup
 
@@ -171,21 +171,58 @@ When a browser window or tab is closed:
 - **Fallback:** If the API call fails (e.g., network issues), the session mapping will expire after the TTL (1 hour) and be cleaned up automatically.
 - **Component unmount:** When the React component unmounts, it also attempts to close the session if a `customSessionId` is present.
 
+### Abandoned sessions and client failures
+
+When a session is abandoned or the client fails unexpectedly:
+
+- **Mapping persistence:** Session mappings remain in the database until they expire (default: 1 hour after registration), even if the client disconnects or crashes.
+- **Lazy cleanup:** Expired mappings are automatically removed when:
+  - A new session lookup occurs (`getHeyGenSessionId`)
+  - The mapping list is queried (`listActiveMappings`)
+  - Any database operation checks for active mappings
+- **No proactive cleanup:** There is no background job or scheduled task that automatically removes expired mappings. Cleanup only happens "on-demand" when the database is accessed.
+- **Orphaned mappings:** If a client crashes or loses network connectivity before cleanup can occur:
+  - The mapping will remain in the database until expiration (up to 1 hour)
+  - The HeyGen session may timeout independently (5 minutes of inactivity)
+  - A new session with the same `customSessionId` can replace the old mapping after the previous one expires or is manually cleaned up
+
+**Important considerations:**
+
+- **Mapping TTL:** The default TTL of 1 hour provides a safety window for reconnection, but also means abandoned sessions may block the `customSessionId` for up to 1 hour.
+- **HeyGen session timeout:** HeyGen sessions timeout after 5 minutes of inactivity, but the mapping in the database persists longer (1 hour by default).
+- **Race conditions:** If a client reconnects within the TTL window, it may find an expired mapping that hasn't been cleaned up yet, potentially causing conflicts.
+- **Best practice:** For production use, consider implementing a background cleanup job or reducing the TTL if faster cleanup is required.
+
 ### Session lifecycle
 
-1. **Start:** Session is initiated with optional `customSessionId` from URL parameter
-2. **Connect:** Once connected, mapping is registered if `customSessionId` is provided
+1. **Start:** Session is initiated with optional `customSessionId` from URL parameter. The client auto-starts the session once when the page loads.
+2. **Connect:** Once connected, mapping is registered if `customSessionId` is provided, and the client subscribes to Server-Sent Events (SSE) for session control.
 3. **Active:** Session remains active until:
    - User closes the window/tab
    - Session times out due to inactivity (5 minutes)
+   - Server closes the session via REST API (emits SSE `session-close` event)
    - Stream is disconnected externally
    - New session replaces it with the same `customSessionId`
-4. **Cleanup:** On disconnect, the session is closed via API and mapping is unregistered
+4. **Cleanup:** On disconnect, the session is closed via API and mapping is unregistered. Sessions closed explicitly or by timeout will not auto-restart (prevents uncontrolled costs).
+5. **Reconnection:** To restart a closed session, the user must reload the page or the server can trigger reconfiguration via SSE `config-update` event.
+
+### Server-Sent Events (SSE) for session control
+
+The application uses Server-Sent Events to enable server-to-client communication for session management:
+
+- **`GET /api/avatar/session-events?customSessionId=<id>`** – SSE endpoint that clients subscribe to for session control events
+- **Events:**
+  - `session-close` – Notifies the client that the session should be closed. Prevents auto-restart.
+  - `config-update` – Notifies the client to reconfigure the session with new settings (avatar, voice, etc.)
+  - `heartbeat` – Keep-alive messages every 30 seconds
+
+When the server calls `POST /api/avatar/close-session`, it emits a `session-close` SSE event that notifies connected clients to close their sessions and prevents them from auto-restarting.
 
 ### API endpoints
 
 - **`POST /api/avatar/register-session`** – Registers a mapping between `customSessionId` and `heygenSessionId`
-- **`POST /api/avatar/close-session`** – Closes a session by `customSessionId` (translates to `heygenSessionId` internally)
+- **`POST /api/avatar/close-session`** – Closes a session by `customSessionId` (translates to `heygenSessionId` internally) and emits SSE `session-close` event
+- **`POST /api/avatar/reconfigure-session`** – Closes the current session and emits SSE `config-update` event to trigger reconfiguration with new settings
 
 ## Project structure
 
@@ -255,7 +292,7 @@ Inside `createDefaultConfig`, the selected ID is applied to the `avatarName` fie
 
 To change the avatar for your Recall configuration you can update the URL to something like:
 
-```
+```text
 https://interactiveavatarnextjsdemo-rfuq.onrender.com?avatarId=Shawn_Therapist_public
 ```
 

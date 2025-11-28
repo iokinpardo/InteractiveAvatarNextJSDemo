@@ -33,6 +33,8 @@ export const useStreamingAvatarSession = () => {
     handleStreamingTalkingMessage,
     handleEndMessage,
     clearMessages,
+    isExplicitlyClosed,
+    setIsExplicitlyClosed,
   } = useStreamingAvatarContext();
   const { stopVoiceChat } = useVoiceChat();
 
@@ -56,8 +58,10 @@ export const useStreamingAvatarSession = () => {
     ({ detail }: { detail: MediaStream }) => {
       setStream(detail);
       setSessionState(StreamingAvatarSessionState.CONNECTED);
+      // Reset explicitly closed flag when stream is ready
+      setIsExplicitlyClosed(false);
     },
-    [setSessionState, setStream],
+    [setSessionState, setStream, setIsExplicitlyClosed],
   );
 
   const handleStreamReady = useCallback(
@@ -83,13 +87,15 @@ export const useStreamingAvatarSession = () => {
         if (detail.stream) {
           setStream(detail.stream);
           setSessionState(StreamingAvatarSessionState.CONNECTED);
+          // Reset explicitly closed flag when stream is ready
+          setIsExplicitlyClosed(false);
         }
       } else if (event.detail instanceof MediaStream) {
         // Standard case: detail is MediaStream
         handleStream(event as { detail: MediaStream });
       }
     },
-    [handleStream, setSessionId, setStream, setSessionState],
+    [handleStream, setSessionId, setStream, setSessionState, setIsExplicitlyClosed],
   );
 
   const handleConnectionQualityChange = useCallback(
@@ -140,7 +146,7 @@ export const useStreamingAvatarSession = () => {
     setIsAvatarTalking(false);
     setStream(null);
     setSessionId(null);
-    setCustomSessionId(null); // Clear custom session ID
+    // Do NOT clear customSessionId here - allow reconnection
     await avatarRef.current?.stopAvatar();
     setSessionState(StreamingAvatarSessionState.INACTIVE);
   }, [
@@ -153,12 +159,13 @@ export const useStreamingAvatarSession = () => {
     setIsAvatarTalking,
     setStream,
     setSessionId,
-    setCustomSessionId,
     setSessionState,
   ]);
 
   const closeSession = useCallback(
     async (sessionIdToClose: string) => {
+      // Set flag BEFORE calling API to prevent auto-restart
+      setIsExplicitlyClosed(true);
       try {
         const response = await fetch("/api/avatar/close-session", {
           method: "POST",
@@ -178,19 +185,26 @@ export const useStreamingAvatarSession = () => {
         await stop();
       }
     },
-    [stop],
+    [stop, setIsExplicitlyClosed],
   );
 
   const handleStreamDisconnected = useCallback(async () => {
-    // If there's a customSessionId, close the session properly via API
-    // This ensures the HeyGen session is closed and the mapping is unregistered
-    if (customSessionId) {
-      await closeSession(customSessionId);
-    } else {
-      // No customSessionId, just clean up local state
+    // Check if this was an explicit close from the server
+    if (isExplicitlyClosed) {
+      // Server already closed the session via API, just clean up local state
+      // Don't call closeSession() API to avoid double closure
       await stop();
+      return;
     }
-  }, [customSessionId, closeSession, stop]);
+
+    // Unexpected disconnection (timeout, network error, etc.)
+    // Set flag to prevent auto-restart and avoid uncontrolled costs
+    setIsExplicitlyClosed(true);
+    // Clean up local state
+    await stop();
+    // Don't call closeSession() API - server may have already closed it
+    // or it may have timed out
+  }, [isExplicitlyClosed, stop, setIsExplicitlyClosed]);
 
   // Detect when stream is disconnected externally (e.g., via API call)
   useEffect(() => {
@@ -306,8 +320,21 @@ export const useStreamingAvatarSession = () => {
 
   const start = useCallback(
     async (config: StartAvatarRequest, token?: string) => {
-      if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
+      // Check session state - allow starting if INACTIVE or DISCONNECTING
+      // DISCONNECTING is allowed because it means stopAvatar was called and
+      // the session is being cleaned up. By the time we get here, it should
+      // have transitioned to INACTIVE, but we allow it to handle race conditions.
+      if (
+        sessionState !== StreamingAvatarSessionState.INACTIVE &&
+        sessionState !== StreamingAvatarSessionState.DISCONNECTING
+      ) {
         throw new Error("There is already an active session");
+      }
+
+      // If state is DISCONNECTING, wait a bit more for it to become INACTIVE
+      // This handles the case where stopAvatar was just called
+      if (sessionState === StreamingAvatarSessionState.DISCONNECTING) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
       if (!avatarRef.current) {
@@ -331,6 +358,9 @@ export const useStreamingAvatarSession = () => {
         if (result && typeof result === "object" && "session_id" in result) {
           setSessionId((result as { session_id: string }).session_id);
         }
+
+        // Reset explicitly closed flag on successful start
+        setIsExplicitlyClosed(false);
       } catch (error) {
         detachListeners();
         setSessionState(StreamingAvatarSessionState.INACTIVE);
@@ -349,6 +379,7 @@ export const useStreamingAvatarSession = () => {
       avatarRef,
       setSessionState,
       setSessionId,
+      setIsExplicitlyClosed,
     ],
   );
 
