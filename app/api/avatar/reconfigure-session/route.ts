@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { getHeyGenSessionId } from "@/app/lib/sessionMapping";
+import {
+	getHeyGenSessionId,
+	unregisterSessionMapping,
+} from "@/app/lib/sessionMapping";
 import type { SessionConfigUpdate } from "@/app/lib/sessionConfig";
 import { sessionEventEmitter } from "@/app/lib/sessionEventEmitter";
 
@@ -113,6 +116,10 @@ export async function POST(request: Request) {
 			// Continue anyway - the session may have already been closed
 			// or the client may have disconnected
 		}
+
+		// Unregister the old mapping to allow the new session to register cleanly
+		// This prevents the register-session endpoint from having to close an already-closed session
+		await unregisterSessionMapping(trimmedSessionId);
 
 		// Emit SSE event to notify connected clients with the config included
 		sessionEventEmitter.emit(trimmedSessionId, {
