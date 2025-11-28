@@ -10,6 +10,7 @@ export const useSessionReconfiguration = () => {
 		sessionState,
 		setPendingConfigUpdate,
 		pendingConfigUpdate,
+		setIsExplicitlyClosed,
 	} = useStreamingAvatarContext();
 	const { stopAvatar } = useStreamingAvatarSession();
 
@@ -34,6 +35,12 @@ export const useSessionReconfiguration = () => {
 
 		eventSource.addEventListener("connected", (event) => {
 			console.log("Connected to session events stream", event);
+		});
+
+		eventSource.addEventListener("session-close", (event) => {
+			console.log("Received session-close event", event);
+			// Set flag to prevent auto-restart
+			setIsExplicitlyClosed(true);
 		});
 
 		eventSource.addEventListener("config-update", async (event) => {
@@ -71,8 +78,15 @@ export const useSessionReconfiguration = () => {
 
 				console.log("Received configuration from SSE event:", config);
 
-				// Stop the current session FIRST, before setting pending config
-				// This prevents the useEffect from firing prematurely
+				// Reset explicitly closed flag to allow restart with new config
+				setIsExplicitlyClosed(false);
+
+				// Set the pending config FIRST, so it's available when we restart
+				setPendingConfigUpdate(config);
+
+				// Stop the current session - this will trigger a reconnection
+				// The InteractiveAvatar component will detect the pending config
+				// and restart with the new configuration
 				if (
 					sessionState === StreamingAvatarSessionState.CONNECTED ||
 					sessionState === StreamingAvatarSessionState.CONNECTING
@@ -81,14 +95,9 @@ export const useSessionReconfiguration = () => {
 					await stopAvatar();
 					
 					// Wait a bit for state to settle after stopAvatar
+					// The customSessionId will be restored by the useEffect in InteractiveAvatar
 					await new Promise((resolve) => setTimeout(resolve, 300));
 				}
-
-				// Now set the pending config - this will trigger startSession via useEffect
-				// but only after stopAvatar has completed
-				setPendingConfigUpdate(config);
-
-				// No need to mark as consumed - configs expire automatically via TTL
 
 				// Clear the reconnecting flag after a delay
 				// to allow the session to restart
@@ -116,65 +125,6 @@ export const useSessionReconfiguration = () => {
 			eventSource.close();
 			eventSourceRef.current = null;
 		};
-	}, [customSessionId, sessionState, setPendingConfigUpdate, stopAvatar]);
-
-	// Check for pending config on mount or when session becomes inactive
-	// Only check when session is INACTIVE and there's no pending config already
-	useEffect(() => {
-		if (!customSessionId || customSessionId.trim().length === 0) {
-			return;
-		}
-
-		// Only check when session is inactive (not connecting or connected)
-		// This prevents checking while initial session is still starting
-		if (sessionState !== StreamingAvatarSessionState.INACTIVE) {
-			return;
-		}
-
-		// If there's already a pending config, don't fetch again
-		if (pendingConfigUpdate) {
-			return;
-		}
-
-		// Check for pending config when session is inactive
-		const checkPendingConfig = async () => {
-			try {
-				const configResponse = await fetch(
-					`/api/avatar/get-pending-config?customSessionId=${encodeURIComponent(
-						customSessionId.trim(),
-					)}`,
-				);
-
-				if (!configResponse.ok) {
-					console.error("Failed to fetch pending configuration");
-					return;
-				}
-
-				const configData = (await configResponse.json()) as {
-					config: SessionConfigUpdate | null;
-				};
-
-				if (configData.config) {
-					console.log(
-						"Found pending configuration on session start:",
-						configData.config,
-					);
-					// Set pending config - this will trigger startSession via sessionInputsSignature
-					// But only after the current effect cycle completes, ensuring sessionState is INACTIVE
-					setPendingConfigUpdate(configData.config);
-					// No need to mark as consumed - configs expire automatically via TTL
-				}
-			} catch (error) {
-				console.error("Error checking for pending config:", error);
-			}
-		};
-
-		checkPendingConfig();
-	}, [
-		customSessionId,
-		sessionState,
-		pendingConfigUpdate,
-		setPendingConfigUpdate,
-	]);
+	}, [customSessionId, sessionState, setPendingConfigUpdate, setIsExplicitlyClosed, stopAvatar]);
 };
 

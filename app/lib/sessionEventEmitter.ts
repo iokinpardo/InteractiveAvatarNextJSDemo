@@ -9,7 +9,12 @@ type ConfigUpdateEvent = {
 	config: SessionConfigUpdate;
 };
 
-type SessionEvent = ConfigUpdateEvent;
+type SessionCloseEvent = {
+	type: "session-close";
+	customSessionId: string;
+};
+
+type SessionEvent = ConfigUpdateEvent | SessionCloseEvent;
 
 type EventListener = (event: SessionEvent) => void;
 

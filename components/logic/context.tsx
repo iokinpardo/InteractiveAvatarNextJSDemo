@@ -77,6 +77,9 @@ type StreamingAvatarContextProps = {
 
   pendingConfigUpdate: SessionConfigUpdate | null;
   setPendingConfigUpdate: (config: SessionConfigUpdate | null) => void;
+
+  isExplicitlyClosed: boolean;
+  setIsExplicitlyClosed: (isExplicitlyClosed: boolean) => void;
 };
 
 const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
@@ -112,6 +115,8 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     setConnectionQuality: () => {},
     pendingConfigUpdate: null,
     setPendingConfigUpdate: () => {},
+    isExplicitlyClosed: false,
+    setIsExplicitlyClosed: () => {},
   },
 );
 
@@ -253,6 +258,12 @@ const usePendingConfigState = () => {
   return { pendingConfigUpdate, setPendingConfigUpdate };
 };
 
+const useExplicitlyClosedState = () => {
+  const [isExplicitlyClosed, setIsExplicitlyClosed] = useState(false);
+
+  return { isExplicitlyClosed, setIsExplicitlyClosed };
+};
+
 export const StreamingAvatarProvider = ({
   children,
   basePath,
@@ -270,6 +281,7 @@ export const StreamingAvatarProvider = ({
   const talkingState = useStreamingAvatarTalkingState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
   const pendingConfigState = usePendingConfigState();
+  const explicitlyClosedState = useExplicitlyClosedState();
 
   return (
     <StreamingAvatarContext.Provider
@@ -284,6 +296,7 @@ export const StreamingAvatarProvider = ({
         ...talkingState,
         ...connectionQualityState,
         ...pendingConfigState,
+        ...explicitlyClosedState,
       }}
     >
       {children}

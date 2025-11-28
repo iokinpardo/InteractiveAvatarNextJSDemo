@@ -33,16 +33,6 @@ function getDb(): Database.Database {
       );
       
       CREATE INDEX IF NOT EXISTS idx_expires_at ON session_mappings(expires_at);
-      
-      CREATE TABLE IF NOT EXISTS session_config_updates (
-        custom_session_id TEXT PRIMARY KEY,
-        config TEXT NOT NULL,
-        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-        consumed_at INTEGER
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_config_created_at ON session_config_updates(created_at);
-      CREATE INDEX IF NOT EXISTS idx_config_consumed_at ON session_config_updates(consumed_at);
     `);
 
     console.log("Database initialized at:", dbPath);

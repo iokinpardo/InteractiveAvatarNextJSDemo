@@ -112,9 +112,11 @@ function InteractiveAvatar({
 		sessionId: heygenSessionId,
 	} = useStreamingAvatarSession();
 	const {
+		customSessionId: contextCustomSessionId,
 		setCustomSessionId,
 		pendingConfigUpdate,
 		setPendingConfigUpdate,
+		isExplicitlyClosed,
 	} = useStreamingAvatarContext();
 	const { startVoiceChat } = useVoiceChat();
 
@@ -124,6 +126,7 @@ function InteractiveAvatar({
 	const mediaStream = useRef<HTMLVideoElement>(null);
 	const hasStarted = useRef(false);
 	const latestStartRequestIdRef = useRef(0);
+	const isStartingRef = useRef(false);
 	const [sessionError, setSessionError] = useState<string | null>(null);
 	const [voiceChatWarning, setVoiceChatWarning] = useState<string | null>(null);
 	const isInitializing = useRef(false);
@@ -403,6 +406,7 @@ function InteractiveAvatar({
 
 			hasStarted.current = false;
 			isInitializing.current = false;
+			isStartingRef.current = false; // Reset flag on error
 			const message = getErrorMessage(error);
 
 			setSessionError(message);
@@ -440,10 +444,6 @@ function InteractiveAvatar({
 	});
 
 	useEffect(() => {
-		if (!hasStarted.current) {
-			hasStarted.current = true;
-		}
-
 		// Prevent starting if session is already connecting or connected
 		// This prevents race conditions when pending config triggers startSession
 		// while the initial session is still starting
@@ -451,12 +451,45 @@ function InteractiveAvatar({
 			sessionState === StreamingAvatarSessionState.CONNECTING ||
 			sessionState === StreamingAvatarSessionState.CONNECTED
 		) {
-			// Session is already active or starting, don't trigger again
+			// Session is already active or starting, reset flag
+			isStartingRef.current = false;
 			return;
 		}
 
-		startSession();
-	}, [sessionInputsSignature, startSession, sessionState]);
+		// Only auto-start if:
+		// 1. There's a customSessionId in props
+		// 2. Session state is INACTIVE (no active session)
+		// 3. Not explicitly closed (prevents restart after close or timeout)
+		// 4. Not already starting (prevents double start from React Strict Mode or race conditions)
+		if (!customSessionId) {
+			return;
+		}
+
+		if (isExplicitlyClosed) {
+			// Session was explicitly closed or timed out, don't auto-restart
+			return;
+		}
+
+		// Prevent multiple simultaneous starts (e.g., from React Strict Mode double mounting)
+		if (isStartingRef.current) {
+			console.log("Session start already in progress, skipping duplicate start");
+			return;
+		}
+
+		isStartingRef.current = true;
+		startSession()
+			.catch((error) => {
+				// Error is already handled in startSession, just reset flag
+				console.error("Error in startSession from useEffect:", error);
+			})
+			.finally(() => {
+				// Reset flag after start completes (success or failure)
+				// Use setTimeout to ensure state has updated
+				setTimeout(() => {
+					isStartingRef.current = false;
+				}, 100);
+			});
+	}, [sessionInputsSignature, startSession, sessionState, customSessionId, isExplicitlyClosed]);
 
 	useEffect(() => {
 		if (
@@ -469,12 +502,12 @@ function InteractiveAvatar({
 		}
 	}, [effectiveNarrationMode, sanitizedSystemPrompt]);
 
-	// Set customSessionId in context when available
+	// Set customSessionId in context when available from props
+	// This ensures the context has the sessionId for SSE subscription and other operations
 	useEffect(() => {
-		setCustomSessionId(customSessionId ?? null);
-		return () => {
-			setCustomSessionId(null);
-		};
+		if (customSessionId) {
+			setCustomSessionId(customSessionId);
+		}
 	}, [customSessionId, setCustomSessionId]);
 
 	// Register session mapping when both customSessionId and heygenSessionId are available
@@ -632,6 +665,10 @@ function InteractiveAvatar({
 			});
 		} else {
 			stopAvatar();
+		}
+		// Clear customSessionId on unmount for cleanup
+		if (customSessionId) {
+			setCustomSessionId(null);
 		}
 	});
 

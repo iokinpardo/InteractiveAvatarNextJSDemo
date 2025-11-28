@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { getHeyGenSessionId } from "@/app/lib/sessionMapping";
-import {
-	storeConfigUpdate,
-	type SessionConfigUpdate,
-} from "@/app/lib/sessionConfig";
+import type { SessionConfigUpdate } from "@/app/lib/sessionConfig";
 import { sessionEventEmitter } from "@/app/lib/sessionEventEmitter";
 
 const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
@@ -117,24 +114,7 @@ export async function POST(request: Request) {
 			// or the client may have disconnected
 		}
 
-		// Check if there are connected clients listening to SSE events
-		const hasConnectedClients =
-			sessionEventEmitter.getListenerCount(trimmedSessionId) > 0;
-
-		// Only store in database if no clients are connected (for reconnection backup)
-		// If clients are connected, they'll receive the config via SSE immediately
-		if (!hasConnectedClients) {
-			await storeConfigUpdate(trimmedSessionId, configUpdate);
-			console.log(
-				`No connected clients found, stored config in database for session: ${trimmedSessionId}`,
-			);
-		} else {
-			console.log(
-				`Found ${sessionEventEmitter.getListenerCount(trimmedSessionId)} connected client(s), skipping database storage`,
-			);
-		}
-
-		// Always emit SSE event to notify connected clients with the config included
+		// Emit SSE event to notify connected clients with the config included
 		sessionEventEmitter.emit(trimmedSessionId, {
 			type: "config-update",
 			customSessionId: trimmedSessionId,
