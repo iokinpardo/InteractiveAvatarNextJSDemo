@@ -130,6 +130,8 @@ function InteractiveAvatar({
 	const [sessionError, setSessionError] = useState<string | null>(null);
 	const [voiceChatWarning, setVoiceChatWarning] = useState<string | null>(null);
 	const isInitializing = useRef(false);
+	const registeredMappingRef = useRef<string | null>(null);
+	const registeringMappingRef = useRef<string | null>(null);
 
 	// Merge pending config with props (pending config takes precedence)
 	const effectiveConfig = useMemo(() => {
@@ -511,11 +513,30 @@ function InteractiveAvatar({
 	}, [customSessionId, setCustomSessionId]);
 
 	// Register session mapping when both customSessionId and heygenSessionId are available
+	// Only register once per heygenSessionId to avoid re-registering when sessionId changes
 	useEffect(() => {
+		// Reset registered mapping ref when session becomes inactive or sessionId is cleared
+		// This allows re-registration for a new session
+		if (
+			sessionState === StreamingAvatarSessionState.INACTIVE ||
+			!heygenSessionId
+		) {
+			registeredMappingRef.current = null;
+			registeringMappingRef.current = null;
+		}
+
 		if (
 			!customSessionId ||
 			!heygenSessionId ||
 			sessionState !== StreamingAvatarSessionState.CONNECTED
+		) {
+			return;
+		}
+
+		// Skip if we've already registered this mapping or are currently registering it
+		if (
+			registeredMappingRef.current === heygenSessionId ||
+			registeringMappingRef.current === heygenSessionId
 		) {
 			return;
 		}
@@ -527,8 +548,20 @@ function InteractiveAvatar({
 
 		const registerMapping = async () => {
 			if (isCancelled) {
+				registeringMappingRef.current = null;
 				return;
 			}
+
+			// Double-check that we haven't registered this mapping in the meantime
+			if (
+				registeredMappingRef.current === heygenSessionId ||
+				registeringMappingRef.current === heygenSessionId
+			) {
+				return;
+			}
+
+			// Mark as registering to prevent duplicate registrations
+			registeringMappingRef.current = heygenSessionId;
 
 			try {
 				const response = await fetch("/api/avatar/register-session", {
@@ -546,6 +579,9 @@ function InteractiveAvatar({
 					console.log(
 						`Registered session mapping: ${customSessionId} -> ${heygenSessionId}`,
 					);
+					// Mark this mapping as registered
+					registeredMappingRef.current = heygenSessionId;
+					registeringMappingRef.current = null;
 				} else if (response.status === 409) {
 					// Mapping already exists - this is OK if it's the same mapping
 					const data = await response.json().catch(() => ({}));
@@ -553,6 +589,9 @@ function InteractiveAvatar({
 						`Session mapping already exists: ${customSessionId} -> ${heygenSessionId}`,
 						data,
 					);
+					// Mark as registered even if it already existed
+					registeredMappingRef.current = heygenSessionId;
+					registeringMappingRef.current = null;
 				} else {
 					// Retry on other errors
 					const errorText = await response.text().catch(() => response.statusText);
@@ -573,6 +612,7 @@ function InteractiveAvatar({
 						console.error(
 							`Failed to register session mapping after ${MAX_RETRIES} attempts`,
 						);
+						registeringMappingRef.current = null;
 					}
 				}
 			} catch (error) {
@@ -586,6 +626,8 @@ function InteractiveAvatar({
 							registerMapping();
 						}
 					}, RETRY_DELAY);
+				} else {
+					registeringMappingRef.current = null;
 				}
 			}
 		};

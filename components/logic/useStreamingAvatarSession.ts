@@ -79,7 +79,10 @@ export const useStreamingAvatarSession = () => {
           stream?: MediaStream;
         };
 
-        if (detail.session_id) {
+        // Only update session_id if we don't already have one
+        // This prevents re-registration when the session_id is updated after initial registration
+        // The session_id from STREAM_READY should match the one from createStartAvatar
+        if (detail.session_id && !sessionId) {
           setSessionId(detail.session_id);
         }
 
@@ -95,7 +98,7 @@ export const useStreamingAvatarSession = () => {
         handleStream(event as { detail: MediaStream });
       }
     },
-    [handleStream, setSessionId, setStream, setSessionState, setIsExplicitlyClosed],
+    [handleStream, setSessionId, setStream, setSessionState, setIsExplicitlyClosed, sessionId],
   );
 
   const handleConnectionQualityChange = useCallback(
