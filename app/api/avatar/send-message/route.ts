@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { getHeyGenSessionId } from "@/app/lib/sessionMapping";
 
 const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // Verify that a valid session mapping exists before sending
     // Translate custom sessionId to HeyGen sessionId
     const heygenSessionId = await getHeyGenSessionId(sessionId);
 
@@ -63,7 +65,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Session not found. The session may not be registered or may have expired.",
+            "Session not found. The session may not be registered or may have expired. Please ensure the session is active and connected.",
         },
         { status: 404 },
       );
@@ -89,8 +91,12 @@ export async function POST(request: Request) {
       url,
       customSessionId: sessionId.trim(),
       heygenSessionId,
+      task_mode,
       hasApiKey: !!HEYGEN_API_KEY,
     });
+
+    // Note: When task_mode is "sync", HeyGen API will wait for the avatar
+    // to finish speaking before responding, making this endpoint synchronous.
 
     const response = await fetch(url, {
       method: "POST",

@@ -7,29 +7,29 @@ const DEFAULT_TTL_SECONDS = 3600;
  * Register a mapping between a custom session ID and HeyGen's session ID
  */
 export async function registerSessionMapping(
-	customSessionId: string,
-	heygenSessionId: string,
-	ttlSeconds: number = DEFAULT_TTL_SECONDS,
+  customSessionId: string,
+  heygenSessionId: string,
+  ttlSeconds: number = DEFAULT_TTL_SECONDS,
 ): Promise<void> {
-	const trimmedCustom = customSessionId.trim();
-	const trimmedHeyGen = heygenSessionId.trim();
-	const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const trimmedCustom = customSessionId.trim();
+  const trimmedHeyGen = heygenSessionId.trim();
+  const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
 
-	const db = getDb();
-	const stmt = db.prepare(`
+  const db = getDb();
+  const stmt = db.prepare(`
     INSERT OR REPLACE INTO session_mappings 
     (custom_session_id, heygen_session_id, expires_at)
     VALUES (?, ?, ?)
   `);
 
-	stmt.run(trimmedCustom, trimmedHeyGen, expiresAt);
+  stmt.run(trimmedCustom, trimmedHeyGen, expiresAt);
 
-	console.log(
-		`Registered session mapping: ${trimmedCustom} -> ${trimmedHeyGen}`,
-		{
-			expiresAt: new Date(expiresAt * 1000).toISOString(),
-		},
-	);
+  console.log(
+    `Registered session mapping: ${trimmedCustom} -> ${trimmedHeyGen}`,
+    {
+      expiresAt: new Date(expiresAt * 1000).toISOString(),
+    },
+  );
 }
 
 /**
@@ -38,67 +38,69 @@ export async function registerSessionMapping(
  * Also cleans up expired mappings
  */
 export async function getHeyGenSessionId(
-	customSessionId: string,
+  customSessionId: string,
 ): Promise<string | null> {
-	const trimmed = customSessionId.trim();
+  const trimmed = customSessionId.trim();
 
-	const db = getDb();
+  const db = getDb();
 
-	// Clean up expired mappings first
-	const now = Math.floor(Date.now() / 1000);
-	const deleteStmt = db.prepare(`
+  // Clean up expired mappings first
+  const now = Math.floor(Date.now() / 1000);
+  const deleteStmt = db.prepare(`
     DELETE FROM session_mappings 
     WHERE expires_at IS NOT NULL AND expires_at < ?
   `);
-	deleteStmt.run(now);
 
-	// Get the mapping
-	const stmt = db.prepare(`
+  deleteStmt.run(now);
+
+  // Get the mapping
+  const stmt = db.prepare(`
     SELECT heygen_session_id 
     FROM session_mappings 
     WHERE custom_session_id = ? 
     AND (expires_at IS NULL OR expires_at >= ?)
   `);
 
-	const result = stmt.get(trimmed, now) as
-		| { heygen_session_id: string }
-		| undefined;
+  const result = stmt.get(trimmed, now) as
+    | { heygen_session_id: string }
+    | undefined;
 
-	if (result) {
-		return result.heygen_session_id;
-	}
+  if (result) {
+    return result.heygen_session_id;
+  }
 
-	// If no mapping exists, assume it's already a HeyGen session ID
-	// This maintains backward compatibility
-	return trimmed;
+  // If no mapping exists, assume it's already a HeyGen session ID
+  // This maintains backward compatibility
+  return trimmed;
 }
 
 /**
  * Remove a session mapping
  */
 export async function unregisterSessionMapping(
-	customSessionId: string,
+  customSessionId: string,
 ): Promise<void> {
-	const trimmed = customSessionId.trim();
-	const db = getDb();
-	const stmt = db.prepare(
-		"DELETE FROM session_mappings WHERE custom_session_id = ?",
-	);
-	stmt.run(trimmed);
-	console.log(`Unregistered session mapping: ${trimmed}`);
+  const trimmed = customSessionId.trim();
+  const db = getDb();
+  const stmt = db.prepare(
+    "DELETE FROM session_mappings WHERE custom_session_id = ?",
+  );
+
+  stmt.run(trimmed);
+  console.log(`Unregistered session mapping: ${trimmed}`);
 }
 
 /**
  * Check if a custom session ID is registered
  */
 export async function hasSessionMapping(
-	customSessionId: string,
+  customSessionId: string,
 ): Promise<boolean> {
-	const trimmed = customSessionId.trim();
-	const now = Math.floor(Date.now() / 1000);
+  const trimmed = customSessionId.trim();
+  const now = Math.floor(Date.now() / 1000);
 
-	const db = getDb();
-	const stmt = db.prepare(`
+  const db = getDb();
+  const stmt = db.prepare(`
     SELECT 1 
     FROM session_mappings 
     WHERE custom_session_id = ? 
@@ -106,8 +108,9 @@ export async function hasSessionMapping(
     LIMIT 1
   `);
 
-	const result = stmt.get(trimmed, now);
-	return !!result;
+  const result = stmt.get(trimmed, now);
+
+  return !!result;
 }
 
 /**
@@ -115,25 +118,26 @@ export async function hasSessionMapping(
  * Also cleans up expired mappings
  */
 export async function listActiveMappings(): Promise<
-	Array<{
-		custom_session_id: string;
-		heygen_session_id: string;
-		created_at: number;
-		expires_at: number | null;
-	}>
+  Array<{
+    custom_session_id: string;
+    heygen_session_id: string;
+    created_at: number;
+    expires_at: number | null;
+  }>
 > {
-	const db = getDb();
+  const db = getDb();
 
-	// Clean up expired mappings first
-	const now = Math.floor(Date.now() / 1000);
-	const deleteStmt = db.prepare(`
+  // Clean up expired mappings first
+  const now = Math.floor(Date.now() / 1000);
+  const deleteStmt = db.prepare(`
     DELETE FROM session_mappings 
     WHERE expires_at IS NOT NULL AND expires_at < ?
   `);
-	deleteStmt.run(now);
 
-	// Get all active mappings
-	const stmt = db.prepare(`
+  deleteStmt.run(now);
+
+  // Get all active mappings
+  const stmt = db.prepare(`
     SELECT 
       custom_session_id,
       heygen_session_id,
@@ -144,12 +148,12 @@ export async function listActiveMappings(): Promise<
     ORDER BY created_at DESC
   `);
 
-	const results = stmt.all(now) as Array<{
-		custom_session_id: string;
-		heygen_session_id: string;
-		created_at: number;
-		expires_at: number | null;
-	}>;
+  const results = stmt.all(now) as Array<{
+    custom_session_id: string;
+    heygen_session_id: string;
+    created_at: number;
+    expires_at: number | null;
+  }>;
 
-	return results;
+  return results;
 }

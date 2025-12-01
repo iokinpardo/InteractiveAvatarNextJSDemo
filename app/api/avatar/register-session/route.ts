@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import {
   registerSessionMapping,
   hasSessionMapping,
@@ -44,8 +45,7 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         {
-          error:
-            "`customSessionId` is required and must be a non-empty string",
+          error: "`customSessionId` is required and must be a non-empty string",
         },
         { status: 400 },
       );
@@ -57,8 +57,7 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         {
-          error:
-            "`heygenSessionId` is required and must be a non-empty string",
+          error: "`heygenSessionId` is required and must be a non-empty string",
         },
         { status: 400 },
       );
@@ -111,6 +110,7 @@ export async function POST(request: Request) {
               );
             } else {
               const errorText = await response.text();
+
               console.warn(
                 `Failed to close old HeyGen session ${existingHeyGenId}:`,
                 response.status,
@@ -162,4 +162,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

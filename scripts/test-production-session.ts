@@ -2,7 +2,7 @@
 
 /**
  * Production Session Test Script
- * 
+ *
  * Simulates a production session flow:
  * 1. Opens browser session with custom sessionId
  * 2. Performs 5 iterations of avatar reconfiguration and message sending
@@ -46,11 +46,13 @@ class TestError extends Error {
 
 function log(message: string, ...args: unknown[]): void {
   const timestamp = new Date().toISOString();
+
   console.log(`[${timestamp}] ${message}`, ...args);
 }
 
 function logError(message: string, error: unknown): void {
   const timestamp = new Date().toISOString();
+
   console.error(`[${timestamp}] ERROR: ${message}`, error);
 }
 
@@ -64,6 +66,7 @@ async function apiCall(
   body?: unknown,
 ): Promise<ApiResponse> {
   const url = `${BASE_URL}${endpoint}`;
+
   log(`API ${method} ${url}`, body ? { body } : "");
 
   try {
@@ -117,7 +120,7 @@ async function sendMessage(sessionId: string, message: string): Promise<void> {
   await apiCall("/api/avatar/send-message", "POST", {
     sessionId,
     message,
-		taskType: "REPEAT",
+    taskType: "REPEAT",
     taskMode: "SYNC",
   });
   log(`Message sent successfully`);
@@ -145,7 +148,7 @@ async function waitForSessionConnection(
 ): Promise<void> {
   log(`Waiting ${waitSeconds} seconds for session ${sessionId} to connect...`);
   log("(Session registration happens client-side when the browser page loads)");
-  
+
   // Wait for the browser to load and register the session
   // The session registration happens automatically when the InteractiveAvatar component
   // connects to HeyGen and calls the register-session endpoint
@@ -155,7 +158,7 @@ async function waitForSessionConnection(
       log(`  ... ${i + 1}/${waitSeconds} seconds elapsed`);
     }
   }
-  
+
   log("Session connection wait complete. Proceeding with test...");
 }
 
@@ -176,12 +179,14 @@ async function runTest(): Promise<void> {
     log(`Please open the following URL in your browser: ${browserUrl}`);
     log("Waiting for session to connect...");
     log("");
-    
+
     // Wait for session to be established
     await waitForSessionConnection(sessionId, 30);
 
     // Step 2: Perform 5 iterations
-    log("STEP 2: Starting 5 iterations of avatar reconfiguration and messaging");
+    log(
+      "STEP 2: Starting 5 iterations of avatar reconfiguration and messaging",
+    );
     log("");
 
     for (let i = 0; i < 5; i++) {
@@ -219,7 +224,7 @@ async function runTest(): Promise<void> {
     log("=".repeat(60));
   } catch (error) {
     logError("Test failed", error);
-    
+
     // Attempt cleanup
     log("Attempting to close session on error...");
     try {
@@ -241,4 +246,3 @@ if (require.main === module) {
 }
 
 export { runTest, generateSessionId, getBrowserUrl };
-

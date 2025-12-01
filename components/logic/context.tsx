@@ -1,5 +1,7 @@
 "use client";
 
+import type { SessionConfigUpdate } from "@/app/lib/sessionConfig";
+
 import StreamingAvatar, {
   ConnectionQuality,
   StreamingTalkingMessageEvent,
@@ -8,7 +10,6 @@ import StreamingAvatar, {
 import React, { useCallback, useRef, useState } from "react";
 
 import { NarrationMode } from "./narrationMode";
-import type { SessionConfigUpdate } from "@/app/lib/sessionConfig";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
