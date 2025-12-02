@@ -67,8 +67,16 @@ Use the template in `.github/pull_request_template.md`. Every PR must:
 - If a task cannot be completed due to missing configuration or third-party limits, document the blocker and suggested remediation.
 
 ## Helpful References
+
+### Internal
 - README for architecture overview: `./README.md`
 - Tailwind config: `./tailwind.config.js`
 - ESLint config: `./eslint.config.mjs`
+
+### External
+- **HeyGen API Documentation** (<https://docs.heygen.com/reference/new-session>) — Official API reference for endpoints, request/response schemas, and parameters. Use when implementing new API integrations or verifying endpoint behavior.
+- **HeyGen Streaming Avatar SDK** (<https://github.com/HeyGen-Official/StreamingAvatarSDK>) — Official SDK repository with code examples, usage patterns, and implementation details. Use when understanding SDK methods, troubleshooting, or finding code patterns.
+
+> **Note**: Prefer the API documentation for endpoint specifications and the SDK repository for code examples and usage patterns.
 
 Keep this guide updated whenever commands, structure, or policies change.

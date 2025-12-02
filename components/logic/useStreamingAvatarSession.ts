@@ -23,8 +23,6 @@ export const useStreamingAvatarSession = () => {
     setStream,
     sessionId,
     setSessionId,
-    customSessionId,
-    setCustomSessionId,
     setIsListening,
     setIsUserTalking,
     setIsAvatarTalking,
@@ -79,7 +77,10 @@ export const useStreamingAvatarSession = () => {
           stream?: MediaStream;
         };
 
-        if (detail.session_id) {
+        // Only update session_id if we don't already have one
+        // This prevents re-registration when the session_id is updated after initial registration
+        // The session_id from STREAM_READY should match the one from createStartAvatar
+        if (detail.session_id && !sessionId) {
           setSessionId(detail.session_id);
         }
 
@@ -95,7 +96,14 @@ export const useStreamingAvatarSession = () => {
         handleStream(event as { detail: MediaStream });
       }
     },
-    [handleStream, setSessionId, setStream, setSessionState, setIsExplicitlyClosed],
+    [
+      handleStream,
+      setSessionId,
+      setStream,
+      setSessionState,
+      setIsExplicitlyClosed,
+      sessionId,
+    ],
   );
 
   const handleConnectionQualityChange = useCallback(
@@ -194,6 +202,7 @@ export const useStreamingAvatarSession = () => {
       // Server already closed the session via API, just clean up local state
       // Don't call closeSession() API to avoid double closure
       await stop();
+
       return;
     }
 
@@ -226,6 +235,7 @@ export const useStreamingAvatarSession = () => {
         console.log("Stream is no longer active, stopping session");
         isCleanedUp = true;
         stop();
+
         return;
       }
 
@@ -234,10 +244,12 @@ export const useStreamingAvatarSession = () => {
         const endedTracks = currentStream
           .getTracks()
           .filter((track) => track.readyState === "ended");
+
         if (endedTracks.length > 0) {
           console.log("Stream tracks have ended, stopping session");
           isCleanedUp = true;
           stop();
+
           return;
         }
       } catch (error) {
@@ -259,6 +271,7 @@ export const useStreamingAvatarSession = () => {
     };
 
     const tracks = currentStream.getTracks();
+
     tracks.forEach((track) => {
       track.addEventListener("ended", handleTrackEnded);
     });
@@ -396,7 +409,7 @@ export const useStreamingAvatarSession = () => {
     // Check periodically if we're still connecting without a stream
     const checkInterval = setInterval(() => {
       const elapsed = Date.now() - connectingStartTime;
-      
+
       // If we've been connecting for too long without a stream, reset
       // This handles cases where the session is closed externally before stream is ready
       if (
@@ -404,7 +417,9 @@ export const useStreamingAvatarSession = () => {
         sessionState === StreamingAvatarSessionState.CONNECTING &&
         elapsed >= CONNECTING_TIMEOUT
       ) {
-        console.log("Connection timeout (session may have been closed externally), resetting session state");
+        console.log(
+          "Connection timeout (session may have been closed externally), resetting session state",
+        );
         setSessionState(StreamingAvatarSessionState.INACTIVE);
         setSessionId(null);
         clearInterval(checkInterval);
@@ -436,6 +451,7 @@ export const useStreamingAvatarSession = () => {
         console.log("Stream is no longer active, stopping session");
         isCleanedUp = true;
         stop();
+
         return;
       }
 
@@ -444,10 +460,12 @@ export const useStreamingAvatarSession = () => {
         const endedTracks = currentStream
           .getTracks()
           .filter((track) => track.readyState === "ended");
+
         if (endedTracks.length > 0) {
           console.log("Stream tracks have ended, stopping session");
           isCleanedUp = true;
           stop();
+
           return;
         }
       } catch (error) {
@@ -469,6 +487,7 @@ export const useStreamingAvatarSession = () => {
     };
 
     const tracks = currentStream.getTracks();
+
     tracks.forEach((track) => {
       track.addEventListener("ended", handleTrackEnded);
     });

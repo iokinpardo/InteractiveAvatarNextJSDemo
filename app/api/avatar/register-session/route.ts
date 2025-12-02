@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import {
   registerSessionMapping,
   hasSessionMapping,
@@ -44,8 +45,7 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         {
-          error:
-            "`customSessionId` is required and must be a non-empty string",
+          error: "`customSessionId` is required and must be a non-empty string",
         },
         { status: 400 },
       );
@@ -57,8 +57,7 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         {
-          error:
-            "`heygenSessionId` is required and must be a non-empty string",
+          error: "`heygenSessionId` is required and must be a non-empty string",
         },
         { status: 400 },
       );
@@ -70,10 +69,13 @@ export async function POST(request: Request) {
 
     if (await hasSessionMapping(trimmedCustomId)) {
       // Get existing mapping to check if it's the same
-      // Since hasSessionMapping confirmed a mapping exists, getHeyGenSessionId will return the mapped value
+      // Since hasSessionMapping confirmed a mapping exists, getHeyGenSessionId should return the mapped value
       const existingHeyGenId = await getHeyGenSessionId(trimmedCustomId);
 
-      if (existingHeyGenId === trimmedHeyGenId) {
+      // Defensive check: if mapping expired between hasSessionMapping and getHeyGenSessionId calls
+      if (!existingHeyGenId) {
+        // Mapping expired, proceed with registration
+      } else if (existingHeyGenId === trimmedHeyGenId) {
         // Same mapping - idempotent, return success
         return NextResponse.json(
           {
@@ -111,6 +113,7 @@ export async function POST(request: Request) {
               );
             } else {
               const errorText = await response.text();
+
               console.warn(
                 `Failed to close old HeyGen session ${existingHeyGenId}:`,
                 response.status,
@@ -162,4 +165,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

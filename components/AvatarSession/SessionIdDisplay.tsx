@@ -6,10 +6,7 @@ import { StreamingAvatarSessionState } from "../logic";
 export const SessionIdDisplay: React.FC = () => {
   const { sessionId, sessionState } = useStreamingAvatarSession();
 
-  if (
-    sessionState !== StreamingAvatarSessionState.CONNECTED ||
-    !sessionId
-  ) {
+  if (sessionState !== StreamingAvatarSessionState.CONNECTED || !sessionId) {
     return null;
   }
 
@@ -28,13 +25,12 @@ export const SessionIdDisplay: React.FC = () => {
       </p>
       <p className="mt-1 break-all text-xs font-mono">{sessionId}</p>
       <button
-        onClick={handleCopy}
         className="mt-2 text-xs text-blue-400 transition hover:text-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-200"
         type="button"
+        onClick={handleCopy}
       >
         Copiar
       </button>
     </div>
   );
 };
-

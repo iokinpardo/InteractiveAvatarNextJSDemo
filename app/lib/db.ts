@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+
 import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
 
@@ -15,12 +16,14 @@ function getDb(): Database.Database {
 
     // Ensure data directory exists
     const dataDir = join(process.cwd(), "data");
+
     if (!existsSync(dataDir)) {
       mkdirSync(dataDir, { recursive: true });
     }
 
     const dbPath = join(dataDir, "sessions.db");
     const db = new Database(dbPath);
+
     db.pragma("journal_mode = WAL"); // Better concurrency
 
     // Create table if it doesn't exist
@@ -44,4 +47,3 @@ function getDb(): Database.Database {
 }
 
 export { getDb };
-

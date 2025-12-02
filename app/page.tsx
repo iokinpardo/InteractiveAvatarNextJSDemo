@@ -106,9 +106,9 @@ export default async function App({ searchParams }: PageProps) {
         avatarId={avatarId}
         expertName={selectedExpert}
         narrationMode={narrationMode}
+        sessionId={sessionId}
         systemPrompt={systemPrompt}
         voiceOverrides={voiceOverrides}
-        sessionId={sessionId}
       />
     </div>
   );

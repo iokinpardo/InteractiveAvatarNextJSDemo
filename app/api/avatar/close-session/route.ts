@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+
 import { NextResponse } from "next/server";
 
 import { sessionEventEmitter } from "@/app/lib/sessionEventEmitter";
@@ -5,6 +7,7 @@ import {
   getHeyGenSessionId,
   unregisterSessionMapping,
 } from "@/app/lib/sessionMapping";
+import { sessionConfirmationManager } from "@/app/lib/sessionConfirmation";
 
 const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY;
 
@@ -111,15 +114,74 @@ export async function POST(request: Request) {
     // Unregister the mapping after successful closure
     await unregisterSessionMapping(sessionId);
 
+    const trimmedSessionId = sessionId.trim();
+
+    // Generate unique operation ID for synchronous confirmation
+    const operationId = randomUUID();
+
     // Emit SSE event to notify connected clients
-    sessionEventEmitter.emit(sessionId.trim(), {
+    sessionEventEmitter.emit(trimmedSessionId, {
       type: "session-close",
-      customSessionId: sessionId.trim(),
+      customSessionId: trimmedSessionId,
+      operationId,
+    });
+
+    console.log("Session close initiated", {
+      customSessionId: trimmedSessionId,
+      heygenSessionId,
+      operationId,
     });
 
     const data = await response.json();
 
-    return NextResponse.json({ ok: true, data }, { status: 200 });
+    // Wait for client confirmation (timeout: 15 seconds)
+    try {
+      const result = await sessionConfirmationManager.waitForConfirmation(
+        operationId,
+        trimmedSessionId,
+        "close",
+      );
+
+      if (result.status === "error") {
+        return NextResponse.json(
+          {
+            error: "Session close failed",
+            details: result.error || "Unknown error",
+            data,
+          },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          ok: true,
+          message: "Session closed successfully",
+          data,
+        },
+        { status: 200 },
+      );
+    } catch (error) {
+      // Timeout or other error
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+
+      console.error(
+        `Session close timeout or error for ${trimmedSessionId}:`,
+        errorMessage,
+      );
+
+      return NextResponse.json(
+        {
+          error: "Session close timeout",
+          message:
+            "The client did not confirm the session closure within the timeout period (15 seconds).",
+          details: errorMessage,
+          data,
+        },
+        { status: 504 },
+      );
+    }
   } catch (error) {
     console.error("Error closing session:", error);
 
