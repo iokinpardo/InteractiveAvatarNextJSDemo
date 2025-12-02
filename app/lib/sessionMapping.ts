@@ -34,7 +34,7 @@ export async function registerSessionMapping(
 
 /**
  * Get the HeyGen session ID from a custom session ID
- * Returns the customSessionId if no mapping exists (backward compatibility)
+ * Returns null if no mapping exists (sessions must be registered)
  * Also cleans up expired mappings
  */
 export async function getHeyGenSessionId(
@@ -69,9 +69,8 @@ export async function getHeyGenSessionId(
     return result.heygen_session_id;
   }
 
-  // If no mapping exists, assume it's already a HeyGen session ID
-  // This maintains backward compatibility
-  return trimmed;
+  // No mapping exists - return null to indicate session not found
+  return null;
 }
 
 /**

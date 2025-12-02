@@ -23,8 +23,6 @@ export const useStreamingAvatarSession = () => {
     setStream,
     sessionId,
     setSessionId,
-    customSessionId,
-    setCustomSessionId,
     setIsListening,
     setIsUserTalking,
     setIsAvatarTalking,

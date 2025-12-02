@@ -7,6 +7,11 @@
  * 1. Opens browser session with custom sessionId
  * 2. Performs 5 iterations of avatar reconfiguration and message sending
  * 3. Closes the session via REST API
+ *
+ * Note: All API endpoints are now synchronous:
+ * - reconfigure-session: Waits up to 30s for client confirmation
+ * - send-message: With taskMode SYNC, waits for speech duration (extracted from HeyGen response)
+ * - close-session: Waits up to 15s for client confirmation
  */
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:3000";
@@ -106,32 +111,37 @@ async function reconfigureSession(
   avatarId: string,
 ): Promise<void> {
   log(`Reconfiguring session ${sessionId} with avatar ${avatarId}`);
+  log("(This will wait up to 30s for the client to confirm reconfiguration)");
   await apiCall("/api/avatar/reconfigure-session", "POST", {
     sessionId,
     config: {
       avatarId,
     },
   });
-  log(`Session reconfigured successfully`);
+  log(`Session reconfigured successfully (client confirmed)`);
 }
 
 async function sendMessage(sessionId: string, message: string): Promise<void> {
   log(`Sending message to session ${sessionId}`);
+  log(
+    "(With taskMode SYNC, this will wait for the speech duration from HeyGen response)",
+  );
   await apiCall("/api/avatar/send-message", "POST", {
     sessionId,
     message,
     taskType: "REPEAT",
     taskMode: "SYNC",
   });
-  log(`Message sent successfully`);
+  log(`Message sent successfully (speech duration elapsed)`);
 }
 
 async function closeSession(sessionId: string): Promise<void> {
   log(`Closing session ${sessionId}`);
+  log("(This will wait up to 15s for the client to confirm closure)");
   await apiCall("/api/avatar/close-session", "POST", {
     sessionId,
   });
-  log(`Session closed successfully`);
+  log(`Session closed successfully (client confirmed)`);
 }
 
 function generateSessionId(): string {
@@ -144,22 +154,25 @@ function getBrowserUrl(sessionId: string): string {
 
 async function waitForSessionConnection(
   sessionId: string,
-  waitSeconds: number = 15,
+  waitSeconds: number = 20,
 ): Promise<void> {
   log(`Waiting ${waitSeconds} seconds for session ${sessionId} to connect...`);
   log("(Session registration happens client-side when the browser page loads)");
+  log("(This initial wait is only for the browser to load and establish the session)");
 
   // Wait for the browser to load and register the session
   // The session registration happens automatically when the InteractiveAvatar component
   // connects to HeyGen and calls the register-session endpoint
+  // Note: After this initial wait, all API calls are synchronous
   for (let i = 0; i < waitSeconds; i++) {
     await sleep(1);
-    if ((i + 1) % 3 === 0) {
+    if ((i + 1) % 5 === 0) {
       log(`  ... ${i + 1}/${waitSeconds} seconds elapsed`);
     }
   }
 
   log("Session connection wait complete. Proceeding with test...");
+  log("(All subsequent API calls will wait synchronously for completion)");
 }
 
 async function runTest(): Promise<void> {
@@ -180,8 +193,8 @@ async function runTest(): Promise<void> {
     log("Waiting for session to connect...");
     log("");
 
-    // Wait for session to be established
-    await waitForSessionConnection(sessionId, 30);
+    // Wait for session to be established (only needed for initial browser load)
+    await waitForSessionConnection(sessionId, 20);
 
     // Step 2: Perform 5 iterations
     log(
@@ -199,17 +212,15 @@ async function runTest(): Promise<void> {
       log(`Message preview: ${message.substring(0, 50)}...`);
       log("");
 
-      // Change avatar configuration
+      // Change avatar configuration (synchronous - waits for client confirmation)
       log(`[${iteration}.1] Reconfiguring avatar...`);
       await reconfigureSession(sessionId, avatarId);
-      log(`[${iteration}.1] Waiting 8 seconds...`);
-      await sleep(8);
+      log(`[${iteration}.1] Reconfiguration complete`);
 
-      // Send message
+      // Send message (synchronous with SYNC mode - waits for avatar to finish speaking)
       log(`[${iteration}.2] Sending message...`);
       await sendMessage(sessionId, message);
-      log(`[${iteration}.2] Waiting 20 seconds...`);
-      await sleep(20);
+      log(`[${iteration}.2] Message delivery complete`);
 
       log(`--- Iteration ${iteration}/5 completed ---`);
       log("");

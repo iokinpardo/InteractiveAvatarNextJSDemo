@@ -21,8 +21,12 @@ export const useSessionReconfiguration = () => {
   const isReconnectingRef = useRef(false);
   const pendingOperationIdRef = useRef<string | null>(null);
   const pendingCloseOperationIdRef = useRef<string | null>(null);
-  const previousSessionStateRef =
-    useRef<StreamingAvatarSessionState>(sessionState);
+  const sessionStateRef = useRef<StreamingAvatarSessionState>(sessionState);
+
+  // Keep sessionStateRef in sync with sessionState
+  useEffect(() => {
+    sessionStateRef.current = sessionState;
+  }, [sessionState]);
 
   // Subscribe to SSE events when customSessionId is present
   useEffect(() => {
@@ -45,7 +49,7 @@ export const useSessionReconfiguration = () => {
       console.log("Connected to session events stream", event);
     });
 
-    eventSource.addEventListener("session-close", (event) => {
+    eventSource.addEventListener("session-close", async (event) => {
       console.log("Received session-close event", event);
 
       // Parse event data to get operationId if present
@@ -74,6 +78,49 @@ export const useSessionReconfiguration = () => {
 
       // Set flag to prevent auto-restart
       setIsExplicitlyClosed(true);
+
+      // Close the session when we receive the session-close event
+      // Use ref to get current state (avoid stale closure)
+      const currentState = sessionStateRef.current;
+      if (
+        currentState === StreamingAvatarSessionState.CONNECTED ||
+        currentState === StreamingAvatarSessionState.CONNECTING
+      ) {
+        console.log("Closing session due to session-close event");
+        await stopAvatar();
+      } else {
+        console.log(
+          `Session already closed or inactive (state: ${currentState}), confirming immediately`,
+        );
+        // If already inactive, confirm immediately
+        if (operationId && currentState === StreamingAvatarSessionState.INACTIVE) {
+          try {
+            const response = await fetch("/api/avatar/confirm-operation", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                sessionId: customSessionId.trim(),
+                operationId,
+                status: "success",
+              }),
+            });
+
+            if (response.ok) {
+              console.log(
+                `Confirmed session close for operation ${operationId} (already inactive)`,
+              );
+              pendingCloseOperationIdRef.current = null;
+            }
+          } catch (error) {
+            console.error(
+              `Error confirming session close for operation ${operationId}:`,
+              error,
+            );
+          }
+        }
+      }
     });
 
     eventSource.addEventListener("config-update", async (event) => {
@@ -136,9 +183,11 @@ export const useSessionReconfiguration = () => {
         // Stop the current session - this will trigger a reconnection
         // The InteractiveAvatar component will detect the pending config
         // and restart with the new configuration
+        // Use ref to get current state (avoid stale closure)
+        const currentState = sessionStateRef.current;
         if (
-          sessionState === StreamingAvatarSessionState.CONNECTED ||
-          sessionState === StreamingAvatarSessionState.CONNECTING
+          currentState === StreamingAvatarSessionState.CONNECTED ||
+          currentState === StreamingAvatarSessionState.CONNECTING
         ) {
           console.log("Stopping current session for reconfiguration");
           await stopAvatar();
@@ -184,13 +233,8 @@ export const useSessionReconfiguration = () => {
 
   // Confirm reconfiguration when session becomes CONNECTED after reconfiguration
   useEffect(() => {
-    const previousState = previousSessionStateRef.current;
-
-    previousSessionStateRef.current = sessionState;
-
     // Check if we transitioned to CONNECTED and have a pending operationId
     if (
-      previousState !== StreamingAvatarSessionState.CONNECTED &&
       sessionState === StreamingAvatarSessionState.CONNECTED &&
       pendingOperationIdRef.current &&
       customSessionId &&
@@ -206,7 +250,8 @@ export const useSessionReconfiguration = () => {
         }
 
         // Wait a bit more to ensure mapping registration is complete
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // The mapping registration happens asynchronously after CONNECTED state
+        await new Promise((resolve) => setTimeout(resolve, 1500));
 
         try {
           const response = await fetch("/api/avatar/confirm-operation", {
@@ -249,11 +294,8 @@ export const useSessionReconfiguration = () => {
 
   // Confirm session close when session becomes INACTIVE after receiving session-close event
   useEffect(() => {
-    const previousState = previousSessionStateRef.current;
-
-    // Check if we transitioned to INACTIVE and have a pending close operationId
+    // Check if we're INACTIVE and have a pending close operationId
     if (
-      previousState !== StreamingAvatarSessionState.INACTIVE &&
       sessionState === StreamingAvatarSessionState.INACTIVE &&
       pendingCloseOperationIdRef.current &&
       customSessionId
@@ -266,7 +308,7 @@ export const useSessionReconfiguration = () => {
         }
 
         // Wait a bit to ensure the session is fully closed
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         try {
           const response = await fetch("/api/avatar/confirm-operation", {

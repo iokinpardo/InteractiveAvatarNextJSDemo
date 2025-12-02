@@ -69,10 +69,13 @@ export async function POST(request: Request) {
 
     if (await hasSessionMapping(trimmedCustomId)) {
       // Get existing mapping to check if it's the same
-      // Since hasSessionMapping confirmed a mapping exists, getHeyGenSessionId will return the mapped value
+      // Since hasSessionMapping confirmed a mapping exists, getHeyGenSessionId should return the mapped value
       const existingHeyGenId = await getHeyGenSessionId(trimmedCustomId);
 
-      if (existingHeyGenId === trimmedHeyGenId) {
+      // Defensive check: if mapping expired between hasSessionMapping and getHeyGenSessionId calls
+      if (!existingHeyGenId) {
+        // Mapping expired, proceed with registration
+      } else if (existingHeyGenId === trimmedHeyGenId) {
         // Same mapping - idempotent, return success
         return NextResponse.json(
           {
