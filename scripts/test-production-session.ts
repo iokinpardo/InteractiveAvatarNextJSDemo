@@ -9,18 +9,17 @@
  * 3. Closes the session via REST API
  *
  * Note: All API endpoints are now synchronous:
- * - reconfigure-session: Waits up to 30s for client confirmation
+ * - reconfigure-session: Waits up to 60s for client confirmation (includes full reconnection process)
  * - send-message: With taskMode SYNC, waits for speech duration (extracted from HeyGen response)
  * - close-session: Waits up to 15s for client confirmation
  */
 
-const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:3000";
 const AVATAR_IDS = [
-  "Ann_Therapist_public",
+  "Elenora_IT_Sitting_public",
   "Shawn_Therapist_public",
   "Bryan_FitnessCoach_public",
   "Dexter_Doctor_Standing2_public",
-  "Elenora_IT_Sitting_public",
+  "Ann_Therapist_public",
 ];
 
 const SAMPLE_MESSAGES = [
@@ -65,12 +64,48 @@ function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 }
 
+interface CliArgs {
+  host?: string;
+  sessionId?: string;
+}
+
+function parseCliArgs(): CliArgs {
+  const args: CliArgs = {};
+  const argv = process.argv.slice(2);
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+
+    if (arg.startsWith("--host=")) {
+      args.host = arg.substring(7);
+    } else if (arg === "--host" && i + 1 < argv.length) {
+      args.host = argv[++i];
+    } else if (arg.startsWith("--session-id=")) {
+      args.sessionId = arg.substring(13);
+    } else if (arg === "--session-id" && i + 1 < argv.length) {
+      args.sessionId = argv[++i];
+    }
+  }
+
+  return args;
+}
+
+function getBaseUrl(cliHost?: string): string {
+  // Priority: CLI arg > env var > default
+  return (
+    cliHost ||
+    process.env.TEST_BASE_URL ||
+    "http://localhost:3000"
+  );
+}
+
 async function apiCall(
   endpoint: string,
   method: "GET" | "POST",
   body?: unknown,
+  baseUrl?: string,
 ): Promise<ApiResponse> {
-  const url = `${BASE_URL}${endpoint}`;
+  const url = `${baseUrl || getBaseUrl()}${endpoint}`;
 
   log(`API ${method} ${url}`, body ? { body } : "");
 
@@ -109,38 +144,61 @@ async function apiCall(
 async function reconfigureSession(
   sessionId: string,
   avatarId: string,
+  baseUrl?: string,
 ): Promise<void> {
   log(`Reconfiguring session ${sessionId} with avatar ${avatarId}`);
-  log("(This will wait up to 30s for the client to confirm reconfiguration)");
-  await apiCall("/api/avatar/reconfigure-session", "POST", {
-    sessionId,
-    config: {
-      avatarId,
+  log("(This will wait up to 60s for the client to confirm reconfiguration)");
+  await apiCall(
+    "/api/avatar/reconfigure-session",
+    "POST",
+    {
+      sessionId,
+      config: {
+        avatarId,
+      },
     },
-  });
+    baseUrl,
+  );
   log(`Session reconfigured successfully (client confirmed)`);
 }
 
-async function sendMessage(sessionId: string, message: string): Promise<void> {
+async function sendMessage(
+  sessionId: string,
+  message: string,
+  baseUrl?: string,
+): Promise<void> {
   log(`Sending message to session ${sessionId}`);
   log(
     "(With taskMode SYNC, this will wait for the speech duration from HeyGen response)",
   );
-  await apiCall("/api/avatar/send-message", "POST", {
-    sessionId,
-    message,
-    taskType: "REPEAT",
-    taskMode: "SYNC",
-  });
+  await apiCall(
+    "/api/avatar/send-message",
+    "POST",
+    {
+      sessionId,
+      message,
+      taskType: "REPEAT",
+      taskMode: "SYNC",
+    },
+    baseUrl,
+  );
   log(`Message sent successfully (speech duration elapsed)`);
 }
 
-async function closeSession(sessionId: string): Promise<void> {
+async function closeSession(
+  sessionId: string,
+  baseUrl?: string,
+): Promise<void> {
   log(`Closing session ${sessionId}`);
   log("(This will wait up to 15s for the client to confirm closure)");
-  await apiCall("/api/avatar/close-session", "POST", {
-    sessionId,
-  });
+  await apiCall(
+    "/api/avatar/close-session",
+    "POST",
+    {
+      sessionId,
+    },
+    baseUrl,
+  );
   log(`Session closed successfully (client confirmed)`);
 }
 
@@ -148,8 +206,8 @@ function generateSessionId(): string {
   return `test-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-function getBrowserUrl(sessionId: string): string {
-  return `${BASE_URL}?sessionId=${encodeURIComponent(sessionId)}`;
+function getBrowserUrl(sessionId: string, baseUrl?: string): string {
+  return `${baseUrl || getBaseUrl()}?sessionId=${encodeURIComponent(sessionId)}`;
 }
 
 async function waitForSessionConnection(
@@ -175,30 +233,25 @@ async function waitForSessionConnection(
   log("(All subsequent API calls will wait synchronously for completion)");
 }
 
-async function runTest(): Promise<void> {
-  const sessionId = generateSessionId();
-  const browserUrl = getBrowserUrl(sessionId);
+async function runTest(sessionId?: string, baseUrl?: string): Promise<void> {
+  // Priority: provided sessionId > env var > generated
+  const finalSessionId =
+    sessionId || process.env.SESSION_ID || generateSessionId();
+  const finalBaseUrl = baseUrl || getBaseUrl();
+  const browserUrl = getBrowserUrl(finalSessionId, finalBaseUrl);
 
   log("=".repeat(60));
   log("Starting Production Session Test");
   log("=".repeat(60));
-  log(`Session ID: ${sessionId}`);
+  log(`Session ID: ${finalSessionId}`);
+  log(`Base URL: ${finalBaseUrl}`);
   log(`Browser URL: ${browserUrl}`);
   log("");
 
   try {
-    // Step 1: Open browser (this will be done manually or via browser automation)
-    log("STEP 1: Open browser session");
-    log(`Please open the following URL in your browser: ${browserUrl}`);
-    log("Waiting for session to connect...");
-    log("");
-
-    // Wait for session to be established (only needed for initial browser load)
-    await waitForSessionConnection(sessionId, 20);
-
-    // Step 2: Perform 5 iterations
+    // Step 1: Perform 5 iterations
     log(
-      "STEP 2: Starting 5 iterations of avatar reconfiguration and messaging",
+      "STEP 1: Starting 5 iterations of avatar reconfiguration and messaging",
     );
     log("");
 
@@ -214,21 +267,21 @@ async function runTest(): Promise<void> {
 
       // Change avatar configuration (synchronous - waits for client confirmation)
       log(`[${iteration}.1] Reconfiguring avatar...`);
-      await reconfigureSession(sessionId, avatarId);
+      await reconfigureSession(finalSessionId, avatarId, finalBaseUrl);
       log(`[${iteration}.1] Reconfiguration complete`);
 
       // Send message (synchronous with SYNC mode - waits for avatar to finish speaking)
       log(`[${iteration}.2] Sending message...`);
-      await sendMessage(sessionId, message);
+      await sendMessage(finalSessionId, message, finalBaseUrl);
       log(`[${iteration}.2] Message delivery complete`);
 
       log(`--- Iteration ${iteration}/5 completed ---`);
       log("");
     }
 
-    // Step 3: Close session
-    log("STEP 3: Closing session");
-    await closeSession(sessionId);
+    // Step 2: Close session
+    log("STEP 2: Closing session");
+    await closeSession(finalSessionId, finalBaseUrl);
 
     log("=".repeat(60));
     log("Test completed successfully!");
@@ -239,7 +292,7 @@ async function runTest(): Promise<void> {
     // Attempt cleanup
     log("Attempting to close session on error...");
     try {
-      await closeSession(sessionId);
+      await closeSession(finalSessionId, finalBaseUrl);
     } catch (cleanupError) {
       logError("Failed to close session during cleanup", cleanupError);
     }
@@ -250,7 +303,13 @@ async function runTest(): Promise<void> {
 
 // Run the test
 if (require.main === module) {
-  runTest().catch((error) => {
+  const cliArgs = parseCliArgs();
+  // Priority: CLI arg > env var > default (handled by getBaseUrl)
+  const baseUrl = cliArgs.host ? getBaseUrl(cliArgs.host) : undefined;
+  // Priority: CLI arg > env var > generated (handled by runTest)
+  const sessionId = cliArgs.sessionId;
+
+  runTest(sessionId, baseUrl).catch((error) => {
     logError("Unhandled error", error);
     process.exit(1);
   });

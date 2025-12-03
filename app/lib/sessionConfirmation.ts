@@ -16,7 +16,7 @@ interface PendingConfirmation {
 class SessionConfirmationManager {
   private confirmations: Map<string, PendingConfirmation> = new Map();
   private readonly timeouts: Record<OperationType, number> = {
-    reconfigure: 30000, // 30 seconds
+    reconfigure: 60000, // 60 seconds - increased to accommodate full reconnection process
     close: 15000, // 15 seconds
   };
 

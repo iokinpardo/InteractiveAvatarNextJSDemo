@@ -124,6 +124,7 @@ export const useSessionReconfiguration = () => {
     });
 
     eventSource.addEventListener("config-update", async (event) => {
+      const configUpdateStartTime = Date.now();
       console.log("Received config-update event", event);
 
       if (isReconnectingRef.current) {
@@ -189,12 +190,20 @@ export const useSessionReconfiguration = () => {
           currentState === StreamingAvatarSessionState.CONNECTED ||
           currentState === StreamingAvatarSessionState.CONNECTING
         ) {
+          const stopStartTime = Date.now();
           console.log("Stopping current session for reconfiguration");
           await stopAvatar();
+          const stopDuration = Date.now() - stopStartTime;
+          console.log(
+            `[Reconfig] stopAvatar completed in ${stopDuration}ms`,
+          );
 
           // Wait a bit for state to settle after stopAvatar
           // The customSessionId will be restored by the useEffect in InteractiveAvatar
           await new Promise((resolve) => setTimeout(resolve, 300));
+          console.log(
+            `[Reconfig] Total time from config-update event to stop complete: ${Date.now() - configUpdateStartTime}ms`,
+          );
         }
 
         // Clear the reconnecting flag after a delay
@@ -244,14 +253,23 @@ export const useSessionReconfiguration = () => {
       // The mapping registration happens in InteractiveAvatar's useEffect
       const confirmReconfiguration = async () => {
         const operationId = pendingOperationIdRef.current;
+        const connectedTime = Date.now();
 
         if (!operationId) {
           return;
         }
 
+        console.log(
+          `[Reconfig] Session reached CONNECTED state, waiting for mapping registration...`,
+        );
+
         // Wait a bit more to ensure mapping registration is complete
         // The mapping registration happens asynchronously after CONNECTED state
         await new Promise((resolve) => setTimeout(resolve, 1500));
+        const mappingWaitDuration = Date.now() - connectedTime;
+        console.log(
+          `[Reconfig] Mapping wait completed (${mappingWaitDuration}ms after CONNECTED), confirming operation ${operationId}`,
+        );
 
         try {
           const response = await fetch("/api/avatar/confirm-operation", {
@@ -267,8 +285,9 @@ export const useSessionReconfiguration = () => {
           });
 
           if (response.ok) {
+            const totalDuration = Date.now() - connectedTime;
             console.log(
-              `Confirmed reconfiguration completion for operation ${operationId}`,
+              `[Reconfig] Confirmed reconfiguration completion for operation ${operationId} (total: ${totalDuration}ms from CONNECTED)`,
             );
             pendingOperationIdRef.current = null;
           } else {

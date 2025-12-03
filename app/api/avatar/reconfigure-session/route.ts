@@ -140,17 +140,23 @@ export async function POST(request: Request) {
       operationId,
     });
 
+    const reconfigStartTime = Date.now();
     console.log(`Session reconfiguration initiated for ${trimmedSessionId}`, {
       configUpdate,
       operationId,
     });
 
-    // Wait for client confirmation (timeout: 30 seconds)
+    // Wait for client confirmation (timeout: 60 seconds)
     try {
       const result = await sessionConfirmationManager.waitForConfirmation(
         operationId,
         trimmedSessionId,
         "reconfigure",
+      );
+
+      const reconfigDuration = Date.now() - reconfigStartTime;
+      console.log(
+        `Session reconfiguration completed for ${trimmedSessionId} in ${reconfigDuration}ms`,
       );
 
       if (result.status === "error") {
@@ -181,11 +187,16 @@ export async function POST(request: Request) {
         errorMessage,
       );
 
+      const reconfigDuration = Date.now() - reconfigStartTime;
+      console.error(
+        `Session reconfiguration timeout for ${trimmedSessionId} after ${reconfigDuration}ms`,
+      );
+
       return NextResponse.json(
         {
           error: "Session reconfiguration timeout",
           message:
-            "The client did not confirm the reconfiguration within the timeout period (30 seconds).",
+            "The client did not confirm the reconfiguration within the timeout period (60 seconds).",
           details: errorMessage,
         },
         { status: 504 },
